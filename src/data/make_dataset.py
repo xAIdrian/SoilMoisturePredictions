@@ -1,5 +1,3 @@
-%matplotlib inline
-
 import pandas as pd
 import numpy as np
 from glob import glob
@@ -33,6 +31,7 @@ for filename in all_files:
       sensor2_df = pd.read_csv(file)
     else:
       print(f'File {filename} is not being processed')
+
 # ---------------------------------------------------------------
 # Validate Accuweather meets our 5% margin of error for accuracy
 # ---------------------------------------------------------------
@@ -58,6 +57,24 @@ accuweather_meteo_df['Date & Time'] = accuweather_meteo_df['Date & Time'].apply(
 accuweather_df.set_index('Date & Time', inplace=True)
 accuweather_meteo_df.set_index('Date & Time', inplace=True)
 
-fig, ax = plt.subplots(1, 2, figsize=(16, 7))
-ax[0].plot(accuweather_df.index, accuweather_df[['Temperature', 'Pressure (mb)', 'Humidity (%)']].values, label='Accuweather')
-ax[0].plot(accuweather_meteo_df.index, accuweather_meteo_df[['Temp - C', 'Barometer - hPa', 'Hum - %']].values, label='Meteo')
+accuweather_df.sort_index(inplace=True)
+accuweather_meteo_df.sort_index(inplace=True)
+
+plt.figure(figsize=(20,10))
+
+# plot df1
+plt.plot(accuweather_df.index, accuweather_df['Temperature'], label='Temperature 1')
+
+# plot df2
+plt.plot(accuweather_meteo_df.index, accuweather_meteo_df['Temp - C'], label='Temperature 2')
+
+plt.xlabel('Date & Time')
+plt.ylabel('Temperature')
+plt.title('Temperature Comparison')
+plt.legend()
+plt.show()
+
+
+#
+# Understand the Weather Data
+#
