@@ -1,38 +1,16 @@
+%matplotlib inline
+
 import pandas as pd
 import numpy as np
 from glob import glob
-import re
-
-# let's get familiar with our dataset and see what we have
-# with open('../../data/raw/accuweather_hourly_1.29.23_to_6.15.23.csv', 'r', encoding='utf-8', errors='ignore') as file:
-#   single_file_accuweather = pd.read_csv(file)
-
-# with open('../../data/raw/meteo_data_for_accuweather_comparison_1.30.23_to_6.15.23.csv', 'r', encoding='utf-8', errors='ignore') as file:
-#   single_file_meteo_compare = pd.read_csv(file)
-
-# with open('../../data/raw/meteo_data_for_model_1.30.23_to_7.31.23.csv', 'r', encoding='utf-8', errors='ignore') as file:
-#   single_file_metea_model = pd.read_csv(file)
-
-# with open('../../data/raw/Sensor1_ohms_data_1.21.23_to_7.31.23.csv', 'r', encoding='utf-8', errors='ignore') as file:
-#   single_file_sensor1 = pd.read_csv(file)
-
-# with open('../../data/raw/Sensor1_ohms_data_1.21.23_to_7.31.23.csv', 'r', encoding='utf-8', errors='ignore') as file:
-#   single_file_sensor2 = pd.read_csv(file)
-
-# # these can be removed later
-# single_file_accuweather.columns
-# single_file_meteo_compare.info()
-# single_file_metea_model.columns
-
-# single_file_sensor1.head()
-# single_file_sensor2
+import matplotlib.pyplot as plt
 
 # the beginning of processing all our files by filename
 all_files = glob('../../data/raw/*.csv')
 print(f"Total number of files: {len(all_files)}")
 
 accuweather_df = pd.DataFrame()
-meteo_compare_df = pd.DataFrame()
+accuweather_meteo_df = pd.DataFrame()
 metea_model_df = pd.DataFrame()
 
 sensor1_df = pd.DataFrame()
@@ -45,9 +23,9 @@ for filename in all_files:
   with open(filename, 'r', encoding='utf-8', errors='ignore') as file:
     if 'accuweather_hourly' in filename:
       accuweather_df = pd.read_csv(file)
-    elif 'meteo_data_for_model' in filename:
-      single_file_meteo_compare = pd.read_csv(file)
     elif 'meteo_data_for_accuweather_comparison' in filename:
+      accuweather_meteo_df = pd.read_csv(file)
+    elif 'meteo_data_for_model' in filename:
       metea_model_df = pd.read_csv(file)  
     elif 'Sensor1' in filename:
       sensor1_df = pd.read_csv(file)
@@ -55,4 +33,31 @@ for filename in all_files:
       sensor2_df = pd.read_csv(file)
     else:
       print(f'File {filename} is not being processed')
+# ---------------------------------------------------------------
+# Validate Accuweather meets our 5% margin of error for accuracy
+# ---------------------------------------------------------------
 
+print(f"Accuweather: { accuweather_df.columns }")
+print(f"Accuweather Meteo Baseline: { accuweather_meteo_df.columns }")
+
+# Column cleaning. Strip white spaces
+accuweather_df.columns = accuweather_df.columns.str.strip()
+accuweather_meteo_df.columns = accuweather_meteo_df.columns.str.strip()
+
+#
+# Dates
+#
+# Set date column to proper datetime format
+accuweather_df['Date & Time'] = pd.to_datetime(accuweather_df['Date & Time'], format='mixed', infer_datetime_format=True)
+accuweather_meteo_df['Date & Time'] = pd.to_datetime(accuweather_meteo_df['Date & Time'], format='mixed', infer_datetime_format=True)
+
+# standardize to the format: 'Year-Month-Day Hour:Minute:Second'
+accuweather_df['Date & Time'] = accuweather_df['Date & Time'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
+accuweather_meteo_df['Date & Time'] = accuweather_meteo_df['Date & Time'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
+
+accuweather_df.set_index('Date & Time', inplace=True)
+accuweather_meteo_df.set_index('Date & Time', inplace=True)
+
+fig, ax = plt.subplots(1, 2, figsize=(16, 7))
+ax[0].plot(accuweather_df.index, accuweather_df[['Temperature', 'Pressure (mb)', 'Humidity (%)']].values, label='Accuweather')
+ax[0].plot(accuweather_meteo_df.index, accuweather_meteo_df[['Temp - C', 'Barometer - hPa', 'Hum - %']].values, label='Meteo')
