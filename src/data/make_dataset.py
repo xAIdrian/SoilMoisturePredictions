@@ -60,21 +60,37 @@ accuweather_meteo_df.set_index('Date & Time', inplace=True)
 accuweather_df.sort_index(inplace=True)
 accuweather_meteo_df.sort_index(inplace=True)
 
+accuweather_df.index = pd.to_datetime(accuweather_df.index)
+accuweather_meteo_df.index = pd.to_datetime(accuweather_meteo_df.index)
+
+#
+# Understand the Alignment of our Data Sources
+#
+
+# start visually. TODO different graphs and drop irrelevant columns
+accuweather_hourly = accuweather_df.resample('H').mean()
+accuweather_meteo_hourly = accuweather_meteo_df.resample('H').mean()
+
+# Replace all irregular values and NaN to smooth out dataset
+accuweather_hourly.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+accuweather_meteo_hourly.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+
+# TODO for loop for our specific column values
 plt.figure(figsize=(20,10))
-
-# plot df1
-plt.plot(accuweather_df.index, accuweather_df['Temperature'], label='Temperature 1')
-
-# plot df2
-plt.plot(accuweather_meteo_df.index, accuweather_meteo_df['Temp - C'], label='Temperature 2')
-
+accuweather_hourly.head(400)['Pressure (mb)'].plot(label='Accuweather')
+accuweather_meteo_hourly.head(400)['Barometer - hPa'].plot(label='Weather Station')
 plt.xlabel('Date & Time')
-plt.ylabel('Temperature')
-plt.title('Temperature Comparison')
+plt.ylabel('Pressure')
+plt.title('Data Source Comparison')
 plt.legend()
 plt.show()
 
+# let's look at the quantitative difference
+percent_difference = pd.DataFrame()
+percent_difference['Percent Difference'] = abs(accuweather_hourly['Temperature'].sub(accuweather_meteo_hourly['Temp - C']) / accuweather_hourly['Temperature']) * 100
+percent_difference['Percent Difference'] = percent_difference['Percent Difference'].round(2)
+percent_difference.dropna(inplace=True)
+percent_difference['Within Threshold'] = percent_difference['Percent Difference'] <= 5
+percentage_within_threshold = (percent_difference['Within Threshold'].mean() * 100).round(2)
 
-#
-# Understand the Weather Data
-#
+print("Percentage of data within 5% threshold: ", percentage_within_threshold)
