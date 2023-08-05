@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 # the beginning of processing all our files by filename
 all_files = glob('../../data/raw/*.csv')
@@ -23,12 +22,6 @@ for filename in all_files:
       accuweather_df = pd.read_csv(file)
     elif 'meteo_data_for_accuweather_comparison' in filename:
       accuweather_meteo_df = pd.read_csv(file)
-    elif 'meteo_data_for_model' in filename:
-      meteo_model_df = pd.read_csv(file)  
-    elif 'Sensor1' in filename:
-      sensor1_df = pd.read_csv(file)
-    elif 'Sensor2' in filename:
-      sensor2_df = pd.read_csv(file)
     else:
       print(f'File {filename} is not being processed')   
 
@@ -140,26 +133,3 @@ for accuweather_col, accuweather_meteo_col in comp_dict.items():
   plt.savefig(f"../../reports/figures/zoom_400_accuweather_weather_station_comparison_{accuweather_col.replace('/', '')}.png")
 
   plt.show()
-
-
-# -----------------------------------------------------------------
-# Corrolation Research To Find The Best Features For Model Training
-# -----------------------------------------------------------------
-
-#
-# Get Our Whole View Of Corrolations
-#
-
-# Calculating the correlation matrix for all columns
-correlation_matrix = accuweather_df.corr(method='pearson')
-
-# Plotting a heatmap for visualization
-plt.figure(figsize=(12, 10))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=.5)
-plt.title("Correlation Heatmap")
-plt.show()
-
-# Returning the correlation values with the target variable 'clAndijk'
-correlation_with_clAndijk = correlation_matrix['clAndijk']
-correlation_with_clAndijk.sort_values(ascending=False)
-
