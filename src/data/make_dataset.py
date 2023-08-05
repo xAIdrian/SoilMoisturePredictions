@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 # the beginning of processing all our files by filename
 all_files = glob('../../data/raw/*.csv')
@@ -29,7 +30,7 @@ for filename in all_files:
     elif 'Sensor2' in filename:
       sensor2_df = pd.read_csv(file)
     else:
-      print(f'File {filename} is not being processed')
+      print(f'File {filename} is not being processed')   
 
 # ---------------------------------------------------------------
 # Validate Accuweather meets our 5% margin of error for accuracy
@@ -56,48 +57,53 @@ accuweather_meteo_df.set_index('Date & Time', inplace=True)
 accuweather_df.sort_index(inplace=True)
 accuweather_meteo_df.sort_index(inplace=True)
 
+# update the index to be datetime
 accuweather_df.index = pd.to_datetime(accuweather_df.index)
 accuweather_meteo_df.index = pd.to_datetime(accuweather_meteo_df.index)
+
+# plot raw data
+plt.figure()
+accuweather_df['Temperature'].plot(figsize=(20,10), label='Accuweather')
+accuweather_meteo_df[:"2023-06-15 14:42:00"]['Temp - C'].plot(figsize=(20,10), label='Weather Station')   
+plt.legend()
+plt.title('At a Glance: Accuweather vs Weather Station Accuracy')
 
 #
 # Understand the Alignment of our Data Sources
 #
 accuweather_comp_columns = ['Temperature', 'Humidity (%)', 'DewPoint', 'Wind Speed (km/h)', 'WindGust  (km/h)', 'UVIndex', 'WetBulb', 'Pressure (mb)']
 accuweather_meteo_comp_columns = ['Temp - C', 'Hum - %', 'Dew Point - C', 'Wind Speed - km/h', 'High Wind Speed - km/h', 'UV Index', 'Wet Bulb - C', 'Barometer - hPa']
+
 # Use zip() to create pairs and dict() to convert these pairs to a dictionary
 comp_dict =  dict(zip(accuweather_comp_columns, accuweather_meteo_comp_columns))
 
 # start visually. TODO different graphs and drop irrelevant columns
 accuweather_comp_hourly = accuweather_df[accuweather_comp_columns].resample('H').mean()
 accuweather_meteo_comp_hourly = accuweather_meteo_df[accuweather_meteo_comp_columns].resample('H').mean()
+#resampling will gill up those slots for every hour
 
 # Replace all irregular values and NaN to smooth out dataset
 accuweather_comp_hourly.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 accuweather_meteo_comp_hourly.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
-# loop through to save to file and then show the graph
-for accuweather_col, accuweather_meteo_col in comp_dict.items():
-  plt.figure(figsize=(20,10))
-  accuweather_comp_hourly.head(400)[accuweather_col].plot(label='Accuweather')
-  accuweather_meteo_comp_hourly.head(400)[accuweather_meteo_col].plot(label='Weather Station')
-  plt.xlabel('Date & Time')
-  plt.ylabel(accuweather_col)
-  plt.title('Data Source Comparison')
-  plt.legend()
+accuweather_greater_row_num = accuweather_comp_hourly.shape[0] - accuweather_meteo_comp_hourly.shape[0]
+accuweather_comp_hourly.drop(accuweather_comp_hourly.tail(accuweather_greater_row_num).index, inplace=True)
 
-  plt.savefig(f"../../reports/figures/accuweather_weather_station_comparison_{accuweather_col.replace('/', '')}.png")
-
-  plt.show()
+# ensure size equality for calculation
+assert accuweather_comp_hourly.shape[0] == accuweather_meteo_comp_hourly.shape[0]
 
 # calculate the percentage difference between the two data sources by feature
 calculate_percent_difference_df = pd.DataFrame()
 threshold_percentage_df = pd.DataFrame()
 
+# histogram line graph
 for accuweather_col, accuweather_meteo_col in comp_dict.items():
+  # Calculate the percentage difference between the two data sources by feature
   difference_col = f"{accuweather_col} Percent Difference"
   threshold_column = f"{accuweather_col} Within Threshold"
 
   calculate_percent_difference_df[difference_col] = abs(accuweather_comp_hourly[accuweather_col].sub(accuweather_meteo_comp_hourly[accuweather_meteo_col]) / accuweather_comp_hourly[accuweather_col]) * 100
+  
   calculate_percent_difference_df[difference_col] = calculate_percent_difference_df[difference_col].round(2)
   calculate_percent_difference_df.dropna(inplace=True)
 
@@ -105,8 +111,37 @@ for accuweather_col, accuweather_meteo_col in comp_dict.items():
   percentage_within_threshold = (calculate_percent_difference_df[threshold_column].mean() * 100).round(2)
 
   threshold_percentage_df[threshold_column] = [percentage_within_threshold]
+  
+  # Drawing the plot
+  plt.figure(figsize=(30,10))
 
-print(threshold_percentage_df)
+  accuweather_comp_hourly[accuweather_col].plot(label='Accuweather')
+  accuweather_meteo_comp_hourly[accuweather_meteo_col].plot(label='Weather Station')
+  
+  plt.xlabel('Date & Time')
+  plt.ylabel(accuweather_col)
+  plt.title(f"{threshold_percentage_df[threshold_column].values[0]}% of {accuweather_col} values within 5% margin of error")
+  plt.legend()
+
+  plt.savefig(f"../../reports/figures/accuweather_weather_station_comparison_{accuweather_col.replace('/', '')}.png")
+
+  plt.show()
+
+  plt.figure(figsize=(30,10))
+
+  accuweather_comp_hourly.head(500)[accuweather_col].plot(label='Accuweather')
+  accuweather_meteo_comp_hourly.head(500)[accuweather_meteo_col].plot(label='Weather Station')
+  
+  plt.xlabel('Date & Time')
+  plt.ylabel(accuweather_col)
+  plt.title(f"Zoomed In to Month: {threshold_percentage_df[threshold_column].values[0]}% of {accuweather_col} values within 5% margin of error")
+  plt.legend()
+
+  plt.savefig(f"../../reports/figures/zoom_400_accuweather_weather_station_comparison_{accuweather_col.replace('/', '')}.png")
+
+  plt.show()
+
+
 # -----------------------------------------------------------------
 # Corrolation Research To Find The Best Features For Model Training
 # -----------------------------------------------------------------
