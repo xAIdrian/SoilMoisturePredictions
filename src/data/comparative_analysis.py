@@ -70,10 +70,10 @@ accuweather_meteo_comp_columns = ['Temp - C', 'Hum - %', 'Dew Point - C', 'Wind 
 # Use zip() to create pairs and dict() to convert these pairs to a dictionary
 comp_dict =  dict(zip(accuweather_comp_columns, accuweather_meteo_comp_columns))
 
-# start visually. TODO different graphs and drop irrelevant columns
+# start visually 
+#resampling will gill up those slots for every hour
 accuweather_comp_hourly = accuweather_df[accuweather_comp_columns].resample('H').mean()
 accuweather_meteo_comp_hourly = accuweather_meteo_df[accuweather_meteo_comp_columns].resample('H').mean()
-#resampling will gill up those slots for every hour
 
 # Replace all irregular values and NaN to smooth out dataset
 accuweather_comp_hourly.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
