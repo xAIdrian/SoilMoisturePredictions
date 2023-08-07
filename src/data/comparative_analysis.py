@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
 
 # the beginning of processing all our files by filename
 all_files = glob('../../data/raw/*.csv')
@@ -79,6 +80,12 @@ accuweather_meteo_comp_hourly = accuweather_meteo_df[accuweather_meteo_comp_colu
 accuweather_comp_hourly.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 accuweather_meteo_comp_hourly.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
+# scaling our pressure data to normalize comparison
+scaler = MinMaxScaler()
+accuweather_comp_hourly['Pressure (mb)'] = scaler.fit_transform(accuweather_comp_hourly[['Pressure (mb)']])
+accuweather_meteo_comp_hourly['Barometer - hPa'] = scaler.fit_transform(accuweather_meteo_comp_hourly[['Barometer - hPa']])
+
+# drop the last row of accuweather_comp_hourly to ensure size equality for calculation
 accuweather_greater_row_num = accuweather_comp_hourly.shape[0] - accuweather_meteo_comp_hourly.shape[0]
 accuweather_comp_hourly.drop(accuweather_comp_hourly.tail(accuweather_greater_row_num).index, inplace=True)
 
