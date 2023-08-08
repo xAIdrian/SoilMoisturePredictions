@@ -2,8 +2,11 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
-from build_features import set_datetime_as_index
 import seaborn as sns
+from build_features import set_datetime_as_index
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from statsmodels.tsa.seasonal import seasonal_decompose
+
 # -----------------------------------------------------------------
 # Corrolation Research To Find The Best Features For Model Training
 # -----------------------------------------------------------------
@@ -44,10 +47,23 @@ sensor2_resampled = sensor2_df.resample('15T').mean()
 
 # Merge the two sensor dataframes then merge that with weather data
 sensor_merged = pd.merge(sensor1_resampled, sensor2_resampled, left_index=True, right_index=True)
-final_data = pd.merge(meteo_model_resampled, sensor_merged, left_index=True, right_index=True, how='left')
+final_df = pd.merge(meteo_model_resampled, sensor_merged, left_index=True, right_index=True, how='left')
 
+# remove the null values
+final_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+
+# Compare our sensor measures
+plt.plot(final_df['Sensor1 (Ohms)'], label='Sensor 1')
+plt.plot(final_df['Sensor2 (Ohms)'], label='Sensor 2')
+plt.xlabel('Sensors')
+plt.ylabel('Count')
+plt.title('Comparison of Two Sensor Features')
+plt.legend()
+plt.show()
+
+# First draft of visualization
 # Calculating the correlation matrix for all columns
-correlation_matrix = final_data.corr(method='pearson')
+correlation_matrix = final_df.corr(method='pearson')
 
 # Plotting a heatmap for visualization
 plt.figure(figsize=(12, 10))
@@ -55,7 +71,62 @@ sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=.5)
 plt.title("Correlation Heatmap")
 plt.show()
 
-# Returning the correlation values with the target variable 'clAndijk'
-correlation_with_clAndijk = correlation_matrix['clAndijk']
-correlation_with_clAndijk.sort_values(ascending=False)
+# Returning the correlation values with the target variable 
+correlation_with_sensor1 = correlation_matrix['Sensor1 (Ohms)'].drop('Sensor2 (Ohms)')
+correlation_with_sensor2 = correlation_matrix['Sensor2 (Ohms)'].drop('Sensor1 (Ohms)')
+
+correlation_df = pd.DataFrame([correlation_with_sensor1, correlation_with_sensor2]).T
+correlation_df.sort_values(by=['Sensor1 (Ohms)', 'Sensor2 (Ohms)'], ascending=False)
+
+#
+# Let's Standardize The Whole Dataframe and Try Corrolation Again
+# As a sanity check, we should see the same results
+#
+scaled_df = final_df.copy()
+
+# just the column names
+cols_to_minmax_scale = ['Barometer - hPa']
+cols_to_standard_scale = [col for col in scaled_df.columns if col not in cols_to_minmax_scale]
+
+# Scale all of our features, 2 types
+min_max_scaler = MinMaxScaler()
+standard_scaler = StandardScaler()
+
+cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_minmax_scale])
+scaled_df[cols_to_minmax_scale] = cols_to_minmax_scale_values
+
+cols_to_standard_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_standard_scale])
+scaled_df[cols_to_standard_scale] = cols_to_standard_scale_values
+
+# Plotting a heatmap for visualization
+scaled_correlation_matrix = scaled_df.corr(method='pearson')
+
+plt.figure(figsize=(12, 10))
+sns.heatmap(scaled_correlation_matrix, annot=True, cmap='coolwarm', linewidths=.5)
+plt.title("Scaled Correlation Heatmap")
+plt.show()
+
+#
+# Distill our winning corrolations and find additional insights
+#
+efficient_correlation_df = final_df.copy()
+efficient_correlation_df.drop(
+  ['Cooling Degree Days', 'Heating Degree Days', 'Low Temp - C', 'High Temp - C', 'Wet Bulb - C', 'Rain - mm', 'Heating Degree Days', 'Wind Speed - km/h'], 
+  axis=1, 
+  inplace=True
+)
+
+# this is good but takes a long time to load
+print('loading pairplot...')
+sns.pairplot(final_df.head(450), kind='reg')
+
+# Applying seasonal decomposition to the sorted 'Sensor' series
+# Using a seasonal frequency of 365 days
+decomposition_sorted = seasonal_decompose(efficient_correlation_df['Sensor2 (Ohms)'], period=3000, model='additive')
+
+# Re-plotting the decomposition components
+decomposition_plot_sorted = decomposition_sorted.plot()
+decomposition_plot_sorted.set_size_inches(15, 12)
+plt.show()
+
 
