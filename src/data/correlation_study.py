@@ -6,6 +6,7 @@ import seaborn as sns
 from build_features import set_datetime_as_index
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from statsmodels.tsa.seasonal import seasonal_decompose
+import remove_outliers
 
 # -----------------------------------------------------------------
 # Corrolation Research To Find The Best Features For Model Training
@@ -27,9 +28,9 @@ for filename in all_files:
     elif 'Sensor2' in filename:
       sensor2_df = pd.read_csv(file)
 
-#
+# --------------------------------------------------------------
 # Get Our Whole View Of Corrolations
-#
+# --------------------------------------------------------------
 
 # set dates as index
 metea_model_df = set_datetime_as_index(metea_model_df, 'Date & Time')
@@ -45,43 +46,62 @@ meteo_model_resampled = metea_model_df.resample('15T').mean()
 sensor1_resampled = sensor1_df.resample('15T').mean()
 sensor2_resampled = sensor2_df.resample('15T').mean()
 
-# Merge the two sensor dataframes then merge that with weather data
-sensor_merged = pd.merge(sensor1_resampled, sensor2_resampled, left_index=True, right_index=True)
-final_df = pd.merge(meteo_model_resampled, sensor_merged, left_index=True, right_index=True, how='left')
+# Create two new dataframes, one for each sensor. we will also drop end info that showed errors
+full_sensor_one_df = pd.merge(meteo_model_resampled, sensor1_resampled, left_index=True, right_index=True, how='left')
+full_sensor_two_df = pd.merge(meteo_model_resampled, sensor2_resampled, left_index=True, right_index=True, how='left')
 
 # remove the null values
-final_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+full_sensor_one_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+full_sensor_two_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
 # Compare our sensor measures
-plt.plot(final_df['Sensor1 (Ohms)'], label='Sensor 1')
-plt.plot(final_df['Sensor2 (Ohms)'], label='Sensor 2')
+plt.plot(full_sensor_one_df['Sensor1 (Ohms)'], label='Sensor 1')
+plt.plot(full_sensor_two_df['Sensor2 (Ohms)'], label='Sensor 2')
 plt.xlabel('Sensors')
 plt.ylabel('Count')
 plt.title('Comparison of Two Sensor Features')
 plt.legend()
 plt.show()
 
-# First draft of visualization
-# Calculating the correlation matrix for all columns
-correlation_matrix = final_df.corr(method='pearson')
+# --------------------------------------------------------------
+# Removing Outliers
+# --------------------------------------------------------------
 
-# Plotting a heatmap for visualization
+plt.style.use('fivethirtyeight')
+plt.rcParams['figure.figsize'] = (20, 5)
+plt.rcParams['figure.dpi'] = 100
+
+outlier_plot_dataset = remove_outliers.mark_outliers_iqr(full_sensor_one_df, 'Sensor1 (Ohms)')
+remove_outliers.plot_binary_outliers(full_sensor_one_df, 'Sensor1 (Ohms)', outlier_col='Sensor1 (Ohms) outlier', reset_index=True)
+
+# --------------------------------------------------------------
+# Plotting a heatmap for visualization of correlation
+# --------------------------------------------------------------
+
+# Calculating the correlation matrix for all columns
+corr_matrix_sensor_one = full_sensor_one_df.corr(method='pearson')
 plt.figure(figsize=(12, 10))
-sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', linewidths=.5)
-plt.title("Correlation Heatmap")
+sns.heatmap(corr_matrix_sensor_one, annot=True, cmap='coolwarm', linewidths=.5)
+plt.title("Correlation Heatmap Sensor 1")
+plt.show()
+
+corr_matrix_sensor_two = full_sensor_two_df.corr(method='pearson')
+plt.figure(figsize=(12, 10))
+sns.heatmap(corr_matrix_sensor_two, annot=True, cmap='coolwarm', linewidths=.5)
+plt.title("Correlation Heatmap Sensor 2")
 plt.show()
 
 # Returning the correlation values with the target variable 
-correlation_with_sensor1 = correlation_matrix['Sensor1 (Ohms)'].drop('Sensor2 (Ohms)')
-correlation_with_sensor2 = correlation_matrix['Sensor2 (Ohms)'].drop('Sensor1 (Ohms)')
+correlation_with_sensor1 = corr_matrix_sensor_one['Sensor1 (Ohms)']
+correlation_with_sensor2 = corr_matrix_sensor_two['Sensor2 (Ohms)']
 
 correlation_df = pd.DataFrame([correlation_with_sensor1, correlation_with_sensor2]).T
 correlation_df.sort_values(by=['Sensor1 (Ohms)', 'Sensor2 (Ohms)'], ascending=False)
 
-#
+# --------------------------------------------------------------
 # Let's Standardize The Whole Dataframe and Try Corrolation Again
 # As a sanity check, we should see the same results
-#
+# --------------------------------------------------------------
 scaled_df = final_df.copy()
 
 # just the column names
@@ -106,15 +126,9 @@ sns.heatmap(scaled_correlation_matrix, annot=True, cmap='coolwarm', linewidths=.
 plt.title("Scaled Correlation Heatmap")
 plt.show()
 
-#
+# --------------------------------------------------------------
 # Distill our winning corrolations and find additional insights
-#
-efficient_correlation_df = final_df.copy()
-efficient_correlation_df.drop(
-  ['Cooling Degree Days', 'Heating Degree Days', 'Low Temp - C', 'High Temp - C', 'Wet Bulb - C', 'Rain - mm', 'Heating Degree Days', 'Wind Speed - km/h'], 
-  axis=1, 
-  inplace=True
-)
+# --------------------------------------------------------------
 
 # this is good but takes a long time to load
 print('loading pairplot...')
@@ -122,7 +136,8 @@ sns.pairplot(final_df.head(450), kind='reg')
 
 # Applying seasonal decomposition to the sorted 'Sensor' series
 # Using a seasonal frequency of 365 days
-decomposition_sorted = seasonal_decompose(efficient_correlation_df['Sensor2 (Ohms)'], period=3000, model='additive')
+decomposition_sorted = seasonal_decompose(final_df['Sensor1 (Ohms)'], period=3000, model='additive')
+decomposition_sorted = seasonal_decompose(final_df['Sensor2 (Ohms)'], period=3000, model='additive')
 
 # Re-plotting the decomposition components
 decomposition_plot_sorted = decomposition_sorted.plot()

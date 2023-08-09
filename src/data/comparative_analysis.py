@@ -34,9 +34,9 @@ for filename in all_files:
 accuweather_df.columns = accuweather_df.columns.str.strip()
 accuweather_meteo_df.columns = accuweather_meteo_df.columns.str.strip()
 
-#
-# Dates
-#
+# --------------------------------------------------------------
+# Setting dates as index
+# --------------------------------------------------------------
 # Set date column to proper datetime format
 accuweather_df['Date & Time'] = pd.to_datetime(accuweather_df['Date & Time'], format='mixed', infer_datetime_format=True)
 accuweather_meteo_df['Date & Time'] = pd.to_datetime(accuweather_meteo_df['Date & Time'], format='mixed', infer_datetime_format=True)
@@ -62,9 +62,9 @@ accuweather_meteo_df[:"2023-06-15 14:42:00"]['Temp - C'].plot(figsize=(20,10), l
 plt.legend()
 plt.title('At a Glance: Accuweather vs Weather Station Accuracy')
 
-#
+# --------------------------------------------------------------
 # Understand the Alignment of our Data Sources
-#
+# --------------------------------------------------------------
 accuweather_comp_columns = ['Temperature', 'Humidity (%)', 'DewPoint', 'Wind Speed (km/h)', 'WindGust  (km/h)', 'UVIndex', 'WetBulb', 'Pressure (mb)']
 accuweather_meteo_comp_columns = ['Temp - C', 'Hum - %', 'Dew Point - C', 'Wind Speed - km/h', 'High Wind Speed - km/h', 'UV Index', 'Wet Bulb - C', 'Barometer - hPa']
 
