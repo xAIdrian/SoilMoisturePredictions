@@ -71,8 +71,20 @@ plt.style.use('fivethirtyeight')
 plt.rcParams['figure.figsize'] = (20, 5)
 plt.rcParams['figure.dpi'] = 100
 
-outlier_plot_dataset = remove_outliers.mark_outliers_iqr(full_sensor_one_df, 'Sensor1 (Ohms)')
-remove_outliers.plot_binary_outliers(full_sensor_one_df, 'Sensor1 (Ohms)', outlier_col='Sensor1 (Ohms) outlier', reset_index=True)
+outlier_columns = list(full_sensor_one_df.columns)
+
+# IQR method
+for col in outlier_columns:
+  iqr_outlier_plot_dataset = remove_outliers.mark_outliers_iqr(full_sensor_one_df, col)
+  remove_outliers.plot_binary_outliers(iqr_outlier_plot_dataset, col, outlier_col=col + '_outlier', reset_index=True)
+
+for col in outlier_columns:
+  chauvenet_outlier_plot_dataset = remove_outliers.mark_outliers_chauvenet(full_sensor_one_df, col)
+  remove_outliers.plot_binary_outliers(chauvenet_outlier_plot_dataset, col, outlier_col=col + '_outlier', reset_index=True)
+
+lof_outlier_plot_dataset, outliers, X_scores = remove_outliers.mark_outliers_lof(full_sensor_one_df, outlier_columns)
+for col in outlier_columns:
+  remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
 
 # --------------------------------------------------------------
 # Plotting a heatmap for visualization of correlation

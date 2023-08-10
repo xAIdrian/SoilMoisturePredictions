@@ -42,7 +42,7 @@ def plot_binary_outliers(dataset, col, outlier_col, reset_index):
     )
 
     plt.legend(
-        ["outlier " + col, "no outlier " + col],
+        ["no outlier " + col, "outlier " + col],
         loc="upper center",
         ncol=2,
         fancybox=True,
