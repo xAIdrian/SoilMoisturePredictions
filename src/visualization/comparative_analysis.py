@@ -1,8 +1,18 @@
+import sys
+import os
+
+# Get the absolute path of the root directory (adjust according to your specific structure)
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add the root path to sys.path
+sys.path.append(root_path)
+
 import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+from data.datetime_utils import set_datetime_as_index
 
 # the beginning of processing all our files by filename
 all_files = glob('../../data/raw/*.csv')
@@ -38,22 +48,8 @@ accuweather_meteo_df.columns = accuweather_meteo_df.columns.str.strip()
 # Setting dates as index
 # --------------------------------------------------------------
 # Set date column to proper datetime format
-accuweather_df['Date & Time'] = pd.to_datetime(accuweather_df['Date & Time'], format='mixed', infer_datetime_format=True)
-accuweather_meteo_df['Date & Time'] = pd.to_datetime(accuweather_meteo_df['Date & Time'], format='mixed', infer_datetime_format=True)
-
-# standardize to the format: 'Year-Month-Day Hour:Minute:Second'
-accuweather_df['Date & Time'] = accuweather_df['Date & Time'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
-accuweather_meteo_df['Date & Time'] = accuweather_meteo_df['Date & Time'].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
-
-accuweather_df.set_index('Date & Time', inplace=True)
-accuweather_meteo_df.set_index('Date & Time', inplace=True)
-
-accuweather_df.sort_index(inplace=True)
-accuweather_meteo_df.sort_index(inplace=True)
-
-# update the index to be datetime
-accuweather_df.index = pd.to_datetime(accuweather_df.index)
-accuweather_meteo_df.index = pd.to_datetime(accuweather_meteo_df.index)
+accuweather_df = set_datetime_as_index(accuweather_df, 'Date & Time')
+accuweather_meteo_df = set_datetime_as_index(accuweather_meteo_df, 'Date & Time')
 
 # plot raw data
 plt.figure()

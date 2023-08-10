@@ -1,12 +1,20 @@
+import sys
+import os
+
+# Get the absolute path of the root directory (adjust according to your specific structure)
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add the root path to sys.path
+sys.path.append(root_path)
+
 import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
 import seaborn as sns
-from build_features import set_datetime_as_index
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from data.datetime_utils import set_datetime_as_index
 from statsmodels.tsa.seasonal import seasonal_decompose
-import remove_outliers
+import data.remove_outliers as remove_outliers
 
 # -----------------------------------------------------------------
 # Corrolation Research To Find The Best Features For Model Training
@@ -87,6 +95,27 @@ for col in outlier_columns:
   remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
 
 # --------------------------------------------------------------
+# Find additional insights through seasonal decomposition
+# --------------------------------------------------------------
+
+# this is good but takes a long time to load
+# print('loading pairplot...')
+# sns.pairplot(full_sensor_one_df.head(450), kind='reg')
+# sns.pairplot(full_sensor_two_df.head(450), kind='reg')
+
+# Applying seasonal decomposition to the sorted 'Sensor' series
+# Using a seasonal frequency of 365 days
+decomposition_sorted = seasonal_decompose(full_sensor_one_df['Sensor1 (Ohms)'], period=3000, model='additive')
+decomposition_plot_sorted = decomposition_sorted.plot()
+decomposition_plot_sorted.set_size_inches(15, 12)
+plt.show()
+
+decomposition_sorted = seasonal_decompose(full_sensor_two_df['Sensor2 (Ohms)'], period=3000, model='additive')
+decomposition_plot_sorted = decomposition_sorted.plot()
+decomposition_plot_sorted.set_size_inches(15, 12)
+plt.show()
+
+# --------------------------------------------------------------
 # Plotting a heatmap for visualization of correlation
 # --------------------------------------------------------------
 
@@ -110,50 +139,5 @@ correlation_with_sensor2 = corr_matrix_sensor_two['Sensor2 (Ohms)']
 correlation_df = pd.DataFrame([correlation_with_sensor1, correlation_with_sensor2]).T
 correlation_df.sort_values(by=['Sensor1 (Ohms)', 'Sensor2 (Ohms)'], ascending=False)
 
-# --------------------------------------------------------------
-# Let's Standardize The Whole Dataframe and Try Corrolation Again
-# As a sanity check, we should see the same results
-# --------------------------------------------------------------
-scaled_df = final_df.copy()
-
-# just the column names
-cols_to_minmax_scale = ['Barometer - hPa']
-cols_to_standard_scale = [col for col in scaled_df.columns if col not in cols_to_minmax_scale]
-
-# Scale all of our features, 2 types
-min_max_scaler = MinMaxScaler()
-standard_scaler = StandardScaler()
-
-cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_minmax_scale])
-scaled_df[cols_to_minmax_scale] = cols_to_minmax_scale_values
-
-cols_to_standard_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_standard_scale])
-scaled_df[cols_to_standard_scale] = cols_to_standard_scale_values
-
-# Plotting a heatmap for visualization
-scaled_correlation_matrix = scaled_df.corr(method='pearson')
-
-plt.figure(figsize=(12, 10))
-sns.heatmap(scaled_correlation_matrix, annot=True, cmap='coolwarm', linewidths=.5)
-plt.title("Scaled Correlation Heatmap")
-plt.show()
-
-# --------------------------------------------------------------
-# Distill our winning corrolations and find additional insights
-# --------------------------------------------------------------
-
-# this is good but takes a long time to load
-print('loading pairplot...')
-sns.pairplot(final_df.head(450), kind='reg')
-
-# Applying seasonal decomposition to the sorted 'Sensor' series
-# Using a seasonal frequency of 365 days
-decomposition_sorted = seasonal_decompose(final_df['Sensor1 (Ohms)'], period=3000, model='additive')
-decomposition_sorted = seasonal_decompose(final_df['Sensor2 (Ohms)'], period=3000, model='additive')
-
-# Re-plotting the decomposition components
-decomposition_plot_sorted = decomposition_sorted.plot()
-decomposition_plot_sorted.set_size_inches(15, 12)
-plt.show()
 
 
