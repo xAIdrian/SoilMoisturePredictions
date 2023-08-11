@@ -13,6 +13,7 @@ from glob import glob
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.cluster import KMeans
 from data.datetime_utils import set_datetime_as_index
 from DataTransformation import PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
@@ -39,10 +40,10 @@ for filename in all_files:
     elif 'Sensor2' in filename:
       sensor2_df = pd.read_csv(file)
 
-predictor_columns = ['Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
+predictor_columns = list(['Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
        'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h',
        'Heat Index - C', 'THW Index - C', 'Rain - mm', 'Heating Degree Days',
-       'Cooling Degree Days']      
+       'Cooling Degree Days']    )  
 
 # set dates as index
 metea_model_df = set_datetime_as_index(metea_model_df, 'Date & Time')
@@ -140,6 +141,9 @@ for col in predictor_columns:
   df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'mean')
   df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'std')
 
+# --------------------------------------------------------------
+# Plotting
+
 feb_subset = df_temporal[df_temporal['month'] == 2]
 
 ax1 = feb_subset[['Temp - C', 'Temp - C_temp_std_ws_96', 'Temp - C_temp_mean_ws_96']].plot()
@@ -202,21 +206,32 @@ subset[[
 ]].plot()
 
 df_freq_list = []
-for col in predictor_columns:
-  df_frequency = FreqAbs.abstract_frequency(df_frequency, [col], window_size, sampling_rate)
-  df_freq_list.append(col + '_freq_1.625_Hz_ws_96')
-  df_freq_list.append(col + '_freq_2.0_Hz_ws_96')
+for week in df_frequency['week_of_year'].unique():
+  print(f"Applying Fourier Transformation to Week #{week}")
+  curr_subset = df_frequency[df_frequency['week_of_year'] == week].reset_index(drop=True).copy()
+  curr_subset = FreqAbs.abstract_frequency(curr_subset, predictor_columns, window_size, sampling_rate)
+  df_freq_list.append(curr_subset)
+
+df_frequency = pd.concat(df_freq_list).set_index('Date & Time', drop=True)
 
 # --------------------------------------------------------------
-# Dealing with overlapping windows
+# Dealing with overlapping windows to reduce overfitting
+# use the 50% window overlap rule. allowed with larger datasets
 # --------------------------------------------------------------
 
+df_frequency.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+
+# :: means every other row
+df_frequency = df_frequency.iloc[::2]
 
 # --------------------------------------------------------------
 # Clustering
 # --------------------------------------------------------------
 
 
+
 # --------------------------------------------------------------
 # Export dataset
 # --------------------------------------------------------------
+
+df_frequency.to_pickle('../../data/interim/03_data_features.pkl')
