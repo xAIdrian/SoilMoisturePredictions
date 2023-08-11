@@ -11,11 +11,15 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
-from DataTransformation import PrincipalComponentAnalysis
-from TemporalAbstraction import NumericalAbstraction
+import matplotlib.dates as mdates
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from data.datetime_utils import set_datetime_as_index
+from DataTransformation import PrincipalComponentAnalysis
+from TemporalAbstraction import NumericalAbstraction
+from FrequencyAbstraction import FourierTransformation
 
+plt.rcParams['figure.figsize'] = (20, 5)
+plt.rcParams['figure.dpi'] = 100
 # --------------------------------------------------------------
 # Load data
 # --------------------------------------------------------------
@@ -54,14 +58,14 @@ meteo_model_resampled = metea_model_df.resample('15T').mean()
 sensor1_resampled = sensor1_df.resample('15T').mean()
 sensor2_resampled = sensor2_df.resample('15T').mean()
 
+# feature engineering
+meteo_model_resampled['month'] = meteo_model_resampled.index.month
+meteo_model_resampled['day_of_week'] = meteo_model_resampled.index.dayofweek
+meteo_model_resampled['week_of_year'] = (meteo_model_resampled.index.dayofyear - 1) // 7 + 1
+
 # Create two new dataframes, one for each sensor. we will also drop end info that showed errors
 full_sensor_one_df = pd.merge(meteo_model_resampled, sensor1_resampled, left_index=True, right_index=True, how='left')
 full_sensor_two_df = pd.merge(meteo_model_resampled, sensor2_resampled, left_index=True, right_index=True, how='left')
-
-# --------------------------------------------------------------
-# We'll start by analyzing sensor 1 all on its own then we will
-# come back to look at sensor 2
-# --------------------------------------------------------------
 
 # --------------------------------------------------------------
 # Dealing with scaling and missing values (imputation)
@@ -74,8 +78,9 @@ full_sensor_two_df.interpolate(method='linear', limit_direction='forward', axis=
 scaled_df = full_sensor_one_df.copy()
 
 # just the column names
+cols_feature_eng = ['month', 'day_of_week', 'week_of_year']
 cols_to_minmax_scale = ['Barometer - hPa']
-cols_to_standard_scale = [col for col in scaled_df.columns if col not in cols_to_minmax_scale]
+cols_to_standard_scale = [col for col in scaled_df.columns if col not in cols_to_minmax_scale and col not in cols_feature_eng]
 
 # Scale all of our features, 2 types
 min_max_scaler = MinMaxScaler()
@@ -86,6 +91,13 @@ scaled_df[cols_to_minmax_scale] = cols_to_minmax_scale_values
 
 cols_to_standard_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_standard_scale])
 scaled_df[cols_to_standard_scale] = cols_to_standard_scale_values
+
+# --------------------------------------------------------------
+# --------------------------------------------------------------
+# We'll start by analyzing sensor 1 all on its own then we will
+# come back to look at sensor 2
+# --------------------------------------------------------------
+# --------------------------------------------------------------
 
 # --------------------------------------------------------------
 # Principal component analysis PCA
@@ -111,7 +123,7 @@ plt.show()
 # looks like 4 components is what we want
 # we may need to come back and look at 
 df_pca = pca.apply_pca(full_sensor_one_df, predictor_columns, 5)
-df_pca.head(100)[['pca_1', 'pca_2', 'pca_3', 'pca_4', 'pca_5']].plot()
+df_pca.head(1000)[['pca_1', 'pca_2', 'pca_3', 'pca_4', 'pca_5']].plot()
 
 # --------------------------------------------------------------
 # Temporal abstraction
@@ -122,42 +134,78 @@ NumAbs = NumericalAbstraction()
 
 # how many values we want to look back
 # 96 window size is one day. 4 window = 1 hour * 24 hours = 96 window
-window_size = 4 
+window_size = 96 
 
 for col in predictor_columns:
   df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'mean')
   df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'std')
 
-subset = df_temporal['2023-02-05':'2023-02-12']
-# Plotting the first subset
-ax1 = subset[['Temp - C', 'Temp - C_temp_std_ws_4', 'Temp - C_temp_mean_ws_4']].plot()
-ax1.set_title('Temperature Analysis - 1st Week of February')
+feb_subset = df_temporal[df_temporal['month'] == 2]
+
+ax1 = feb_subset[['Temp - C', 'Temp - C_temp_std_ws_96', 'Temp - C_temp_mean_ws_96']].plot()
+ax1.set_title('February - Temperature Analysis Temporal Abstraction Daily')
 ax1.set_xlabel('Date & Time')
 ax1.set_ylabel('Temperature (°C)')
 
-# Plotting the second subset
-ax2 = subset[['Hum - %', 'Hum - %_temp_std_ws_4', 'Hum - %_temp_mean_ws_4']].plot()
-ax2.set_title('Humidity Analysis - 1st Week of February')
+march_subset = df_temporal[df_temporal['month'] == 3]
+
+ax2 = march_subset[['Hum - %', 'Hum - %_temp_std_ws_96', 'Hum - %_temp_mean_ws_96']].plot()
+ax2.set_title('March - Humidity Analysis Temporal Abstraction Daily')
 ax2.set_xlabel('Date & Time')
 ax2.set_ylabel('Humidity (%)')
 
-subset = df_temporal['2023-05-05':'2023-05-12']
-# Plotting the first subset
-ax1 = subset[['Temp - C', 'Temp - C_temp_std_ws_4', 'Temp - C_temp_mean_ws_4']].plot()
-ax1.set_title('Temperature Analysis - 1st Week of May')
-ax1.set_xlabel('Date & Time')
-ax1.set_ylabel('Temperature (°C)')
+april_subset = df_temporal[df_temporal['month'] == 4]
 
-# Plotting the second subset
-ax2 = subset[['Hum - %', 'Hum - %_temp_std_ws_4', 'Hum - %_temp_mean_ws_4']].plot()
-ax2.set_title('Humidity Analysis - 1st Week of May')
-ax2.set_xlabel('Date & Time')
-ax2.set_ylabel('Humidity (%)')
+ax3 = april_subset[['THW Index - C', 'THW Index - C_temp_std_ws_96', 'THW Index - C_temp_mean_ws_96']].plot()
+ax3.set_title('April - Temperature Analysis Temporal Abstraction Daily')
+ax3.set_xlabel('Date & Time')
+ax3.set_ylabel('THW Index (°C)')
+
+may_subset = df_temporal[df_temporal['month'] == 5]
+
+ax4 = may_subset[['Dew Point - C', 'Dew Point - C_temp_std_ws_96', 'Dew Point - C_temp_mean_ws_96']].plot()
+ax4.set_title('May - Humidity Analysis Temporal Abstraction Daily')
+ax4.set_xlabel('Date & Time')
+ax4.set_ylabel('Dew Point (C)')
 
 # --------------------------------------------------------------
 # Frequency features
 # --------------------------------------------------------------
 
+df_frequency = df_temporal.copy().reset_index()
+FreqAbs = FourierTransformation()
+
+# sampling rate is one hour
+# window size is one day
+sampling_rate = 4
+window_size = 96
+
+df_frequency = FreqAbs.abstract_frequency(df_frequency, ['Temp - C'], window_size, sampling_rate)
+
+subset = df_frequency[df_frequency['week_of_year'] == 11]
+subset[['Temp - C']].plot()
+subset[[
+  'Temp - C_max_freq',
+  'Temp - C_freq_weighted',
+  'Temp - C_pse',
+  'Temp - C_freq_1.625_Hz_ws_96',
+  'Temp - C_freq_2.0_Hz_ws_96'
+]].plot()
+subset[[
+  'Temp - C_max_freq',
+  'Temp - C_freq_weighted',
+  'Temp - C_pse'
+]].plot()
+subset[[
+  'Temp - C_freq_1.625_Hz_ws_96',
+  'Temp - C_freq_2.0_Hz_ws_96'
+]].plot()
+
+df_freq_list = []
+for col in predictor_columns:
+  df_frequency = FreqAbs.abstract_frequency(df_frequency, [col], window_size, sampling_rate)
+  df_freq_list.append(col + '_freq_1.625_Hz_ws_96')
+  df_freq_list.append(col + '_freq_2.0_Hz_ws_96')
 
 # --------------------------------------------------------------
 # Dealing with overlapping windows
