@@ -11,8 +11,9 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
-from DataTransformation import LowPassFilter, PrincipalComponentAnalysis
+from DataTransformation import PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from data.datetime_utils import set_datetime_as_index
 
 # --------------------------------------------------------------
@@ -33,6 +34,11 @@ for filename in all_files:
       sensor1_df = pd.read_csv(file)
     elif 'Sensor2' in filename:
       sensor2_df = pd.read_csv(file)
+
+predictor_columns = ['Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
+       'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h',
+       'Heat Index - C', 'THW Index - C', 'Rain - mm', 'Heating Degree Days',
+       'Cooling Degree Days']      
 
 # set dates as index
 metea_model_df = set_datetime_as_index(metea_model_df, 'Date & Time')
@@ -58,25 +64,43 @@ full_sensor_two_df = pd.merge(meteo_model_resampled, sensor2_resampled, left_ind
 # --------------------------------------------------------------
 
 # --------------------------------------------------------------
-# Dealing with missing values (imputation)
+# Dealing with scaling and missing values (imputation)
 # --------------------------------------------------------------
-
 # remove the missing values
 full_sensor_one_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 full_sensor_two_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+
+# proper scaling of all values 
+scaled_df = full_sensor_one_df.copy()
+
+# just the column names
+cols_to_minmax_scale = ['Barometer - hPa']
+cols_to_standard_scale = [col for col in scaled_df.columns if col not in cols_to_minmax_scale]
+
+# Scale all of our features, 2 types
+min_max_scaler = MinMaxScaler()
+standard_scaler = StandardScaler()
+
+cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_minmax_scale])
+scaled_df[cols_to_minmax_scale] = cols_to_minmax_scale_values
+
+cols_to_standard_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_standard_scale])
+scaled_df[cols_to_standard_scale] = cols_to_standard_scale_values
 
 # --------------------------------------------------------------
 # Principal component analysis PCA
 # --------------------------------------------------------------
 
-df_pca = full_sensor_one_df.copy()
+df_pca = scaled_df.copy()
 pca = PrincipalComponentAnalysis()
 
 # Paper reports ptimal amount of principle components is 5. 
 # Let's test this
 
-pc_values = pca.determine_pc_explained_variance(full_sensor_one_df, full_sensor_one_df.columns)
+pc_values = pca.determine_pc_explained_variance(full_sensor_one_df, predictor_columns)
 
+# elbow techniques to find best number of PCs
+# capture the most variance without incorporating too much noise
 plt.figure(figsize=(12, 6))
 plt.plot(range(1, len(pc_values) + 1), pc_values, marker='o', linestyle='--')
 plt.xlabel('Number of Principal Components')
@@ -86,22 +110,49 @@ plt.show()
 
 # looks like 4 components is what we want
 # we may need to come back and look at 
-df_pca = pca.apply_pca(full_sensor_one_df, full_sensor_one_df.columns, 4)
-df_pca.head(100)[['pca_1', 'pca_2', 'pca_3', 'pca_4']].plot()
-
-# elbow techniques to find best number of PCs
-# capture the most variance without incorporating too much noise
-
-
-# --------------------------------------------------------------
-# Sum of squares attributes
-# --------------------------------------------------------------
-
+df_pca = pca.apply_pca(full_sensor_one_df, predictor_columns, 5)
+df_pca.head(100)[['pca_1', 'pca_2', 'pca_3', 'pca_4', 'pca_5']].plot()
 
 # --------------------------------------------------------------
 # Temporal abstraction
 # --------------------------------------------------------------
 
+df_temporal = df_pca.copy()
+NumAbs = NumericalAbstraction()
+
+# how many values we want to look back
+# 96 window size is one day. 4 window = 1 hour * 24 hours = 96 window
+window_size = 4 
+
+for col in predictor_columns:
+  df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'mean')
+  df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'std')
+
+subset = df_temporal['2023-02-05':'2023-02-12']
+# Plotting the first subset
+ax1 = subset[['Temp - C', 'Temp - C_temp_std_ws_4', 'Temp - C_temp_mean_ws_4']].plot()
+ax1.set_title('Temperature Analysis - 1st Week of February')
+ax1.set_xlabel('Date & Time')
+ax1.set_ylabel('Temperature (°C)')
+
+# Plotting the second subset
+ax2 = subset[['Hum - %', 'Hum - %_temp_std_ws_4', 'Hum - %_temp_mean_ws_4']].plot()
+ax2.set_title('Humidity Analysis - 1st Week of February')
+ax2.set_xlabel('Date & Time')
+ax2.set_ylabel('Humidity (%)')
+
+subset = df_temporal['2023-05-05':'2023-05-12']
+# Plotting the first subset
+ax1 = subset[['Temp - C', 'Temp - C_temp_std_ws_4', 'Temp - C_temp_mean_ws_4']].plot()
+ax1.set_title('Temperature Analysis - 1st Week of May')
+ax1.set_xlabel('Date & Time')
+ax1.set_ylabel('Temperature (°C)')
+
+# Plotting the second subset
+ax2 = subset[['Hum - %', 'Hum - %_temp_std_ws_4', 'Hum - %_temp_mean_ws_4']].plot()
+ax2.set_title('Humidity Analysis - 1st Week of May')
+ax2.set_xlabel('Date & Time')
+ax2.set_ylabel('Humidity (%)')
 
 # --------------------------------------------------------------
 # Frequency features
