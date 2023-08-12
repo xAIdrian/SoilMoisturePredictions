@@ -11,8 +11,12 @@ import pandas as pd
 import numpy as np
 from glob import glob
 import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
 from data.datetime_utils import set_datetime_as_index
+import data.remove_outliers as remove_outliers
+
+plt.style.use('fivethirtyeight')
+plt.rcParams['figure.figsize'] = (20, 5)
+plt.rcParams['figure.dpi'] = 100
 
 def load_comparative_analysis_data():
   accuweather_df = pd.DataFrame()
@@ -100,4 +104,51 @@ complete_meteo_sensor_df = pd.merge(meteo_model_resampled, sensor_merged, left_i
 complete_meteo_sensor_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
 complete_meteo_sensor_df.to_pickle('../../data/interim/02_complete_meteo_sensors_datetime_df.pkl')
+
+def resistance_to_moisture(resistance):
+    if resistance < 50000:
+        # Assuming a linear decrease from 100% at 0 Ohms to 0% at 50,000 Ohms
+        return 100 - (resistance / 50000) * 100
+    else:
+        return 0.00
+
+moist_meteo_sensor_df = complete_meteo_sensor_df.copy()
+# Apply the custom function to your dataframe (assuming df is your dataframe containing resistance values)
+moist_meteo_sensor_df['Sensor1 Moisture (%)'] = moist_meteo_sensor_df['Sensor1 (Ohms)'].apply(resistance_to_moisture)
+moist_meteo_sensor_df['Sensor2 Moisture (%)'] = moist_meteo_sensor_df['Sensor2 (Ohms)'].apply(resistance_to_moisture)
+
+
+# --------------------------------------------------------------
+# Removing Outliers
+# --------------------------------------------------------------
+
+outlier_columns = list(moist_meteo_sensor_df.columns)
+
+print('IQR method')
+for col in outlier_columns:
+  iqr_outlier_plot_dataset = remove_outliers.mark_outliers_iqr(moist_meteo_sensor_df, col)
+  remove_outliers.plot_binary_outliers(iqr_outlier_plot_dataset, col, outlier_col=col + '_outlier', reset_index=True)
+
+print('Chauvenet method')
+for col in outlier_columns:
+  chauvenet_outlier_plot_dataset = remove_outliers.mark_outliers_chauvenet(moist_meteo_sensor_df, col)
+  remove_outliers.plot_binary_outliers(chauvenet_outlier_plot_dataset, col, outlier_col=col + '_outlier', reset_index=True)
+
+print('LOF method')
+lof_outlier_plot_dataset, outliers, X_scores = remove_outliers.mark_outliers_lof(moist_meteo_sensor_df, outlier_columns)
+for col in outlier_columns:
+  remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
+
+# We will choose LOF and remove the outliers
+
+real_outlier_columns = ['Sensor1 (Ohms)', 'Sensor2 (Ohms)', 'Sensor1 Moisture (%)', 'Sensor2 Moisture (%)']
+
+outlier_safe_df, outliers, X_scores = remove_outliers.mark_outliers_lof(moist_meteo_sensor_df, real_outlier_columns)
+for column in real_outlier_columns:
+  outlier_safe_df.loc[outlier_safe_df['outlier_lof'], column] = np.nan
+
+# remove the null values
+outlier_safe_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+
+outlier_safe_df.to_pickle('../../data/interim/02.5_outlier_safe_complete_datetime_df.pkl')
 

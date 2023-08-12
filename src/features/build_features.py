@@ -23,7 +23,7 @@ plt.style.use('fivethirtyeight')
 plt.rcParams['figure.figsize'] = (20, 5)
 plt.rcParams['figure.dpi'] = 100
 
-complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02_complete_meteo_sensors_datetime_df.pkl')
+complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02.5_outlier_safe_complete_datetime_df.pkl')
 
 predictor_columns = list(['Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
        'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h',
