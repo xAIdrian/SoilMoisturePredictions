@@ -19,64 +19,24 @@ from DataTransformation import PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
 from FrequencyAbstraction import FourierTransformation
 
+plt.style.use('fivethirtyeight')
 plt.rcParams['figure.figsize'] = (20, 5)
 plt.rcParams['figure.dpi'] = 100
-# --------------------------------------------------------------
-# Load data
-# --------------------------------------------------------------
-all_files = glob('../../data/raw/*.csv')
-print(f"Total number of files: {len(all_files)}")
 
-metea_model_df = pd.DataFrame()
-sensor1_df = pd.DataFrame()
-sensor2_df = pd.DataFrame()
-
-for filename in all_files:
-  with open(filename, 'r', encoding='utf-8', errors='ignore') as file:
-    if 'meteo_data for model' in filename:
-      metea_model_df = pd.read_csv(file)
-    elif 'Sensor1' in filename:
-      sensor1_df = pd.read_csv(file)
-    elif 'Sensor2' in filename:
-      sensor2_df = pd.read_csv(file)
+complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02_complete_meteo_sensors_datetime_df.pkl')
 
 predictor_columns = list(['Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
        'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h',
        'Heat Index - C', 'THW Index - C', 'Rain - mm', 'Heating Degree Days',
        'Cooling Degree Days']    )  
 
-# set dates as index
-metea_model_df = set_datetime_as_index(metea_model_df, 'Date & Time')
-sensor1_df = set_datetime_as_index(sensor1_df, 'Date & Time')
-sensor2_df = set_datetime_as_index(sensor2_df, 'Date&Time')
-
-sensor1_df = sensor1_df.groupby('Date & Time').mean()
-sensor2_df = sensor2_df.groupby('Date&Time').mean()
-
-# resampling to 15 min intervals. setting the average within each 15 min bucket
-# we could use reset_index() to get the date & time back as a column
-meteo_model_resampled = metea_model_df.resample('15T').mean()
-sensor1_resampled = sensor1_df.resample('15T').mean()
-sensor2_resampled = sensor2_df.resample('15T').mean()
-
 # feature engineering
-meteo_model_resampled['month'] = meteo_model_resampled.index.month
-meteo_model_resampled['day_of_week'] = meteo_model_resampled.index.dayofweek
-meteo_model_resampled['week_of_year'] = (meteo_model_resampled.index.dayofyear - 1) // 7 + 1
-
-# Create two new dataframes, one for each sensor. we will also drop end info that showed errors
-full_sensor_one_df = pd.merge(meteo_model_resampled, sensor1_resampled, left_index=True, right_index=True, how='left')
-full_sensor_two_df = pd.merge(meteo_model_resampled, sensor2_resampled, left_index=True, right_index=True, how='left')
-
-# --------------------------------------------------------------
-# Dealing with scaling and missing values (imputation)
-# --------------------------------------------------------------
-# remove the missing values
-full_sensor_one_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
-full_sensor_two_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+complete_meteo_sensor_df['month'] = complete_meteo_sensor_df.index.month
+complete_meteo_sensor_df['day_of_week'] = complete_meteo_sensor_df.index.dayofweek
+complete_meteo_sensor_df['week_of_year'] = (complete_meteo_sensor_df.index.dayofyear - 1) // 7 + 1
 
 # proper scaling of all values 
-scaled_df = full_sensor_one_df.copy()
+scaled_df = complete_meteo_sensor_df.copy()
 
 # just the column names
 cols_feature_eng = ['month', 'day_of_week', 'week_of_year']
@@ -94,13 +54,6 @@ cols_to_standard_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_s
 scaled_df[cols_to_standard_scale] = cols_to_standard_scale_values
 
 # --------------------------------------------------------------
-# --------------------------------------------------------------
-# We'll start by analyzing sensor 1 all on its own then we will
-# come back to look at sensor 2
-# --------------------------------------------------------------
-# --------------------------------------------------------------
-
-# --------------------------------------------------------------
 # Principal component analysis PCA
 # --------------------------------------------------------------
 
@@ -110,7 +63,7 @@ pca = PrincipalComponentAnalysis()
 # Paper reports ptimal amount of principle components is 5. 
 # Let's test this
 
-pc_values = pca.determine_pc_explained_variance(full_sensor_one_df, predictor_columns)
+pc_values = pca.determine_pc_explained_variance(complete_meteo_sensor_df, predictor_columns)
 
 # elbow techniques to find best number of PCs
 # capture the most variance without incorporating too much noise
@@ -123,7 +76,7 @@ plt.show()
 
 # looks like 4 components is what we want
 # we may need to come back and look at 
-df_pca = pca.apply_pca(full_sensor_one_df, predictor_columns, 5)
+df_pca = pca.apply_pca(complete_meteo_sensor_df, predictor_columns, 5)
 df_pca.head(1000)[['pca_1', 'pca_2', 'pca_3', 'pca_4', 'pca_5']].plot()
 
 # --------------------------------------------------------------
@@ -223,12 +176,6 @@ df_frequency.interpolate(method='linear', limit_direction='forward', axis=0, inp
 
 # :: means every other row
 df_frequency = df_frequency.iloc[::2]
-
-# --------------------------------------------------------------
-# Clustering
-# --------------------------------------------------------------
-
-
 
 # --------------------------------------------------------------
 # Export dataset

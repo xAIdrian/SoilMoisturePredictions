@@ -8,48 +8,11 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_path)
 
 import pandas as pd
-import numpy as np
-from glob import glob
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from data.datetime_utils import set_datetime_as_index
 
-# the beginning of processing all our files by filename
-all_files = glob('../../data/raw/*.csv')
-print(f"Total number of files: {len(all_files)}")
-
-accuweather_df = pd.DataFrame()
-accuweather_meteo_df = pd.DataFrame()
-meteo_model_df = pd.DataFrame()
-
-sensor1_df = pd.DataFrame()
-sensor2_df = pd.DataFrame()
-
-for filename in all_files:
-  curr_filename = filename.replace(' ', '_').replace('. ', '_')
-
-  with open(filename, 'r', encoding='utf-8', errors='ignore') as file:
-    if 'accuweather_hourly' in filename:
-      accuweather_df = pd.read_csv(file)
-    elif 'meteo_data_for_accuweather_comparison' in filename:
-      accuweather_meteo_df = pd.read_csv(file)
-    else:
-      print(f'File {filename} is not being processed')   
-
-# ---------------------------------------------------------------
-# Validate Accuweather meets our 5% margin of error for accuracy
-# ---------------------------------------------------------------
-
-# Column cleaning. Strip white spaces
-accuweather_df.columns = accuweather_df.columns.str.strip()
-accuweather_meteo_df.columns = accuweather_meteo_df.columns.str.strip()
-
-# --------------------------------------------------------------
-# Setting dates as index
-# --------------------------------------------------------------
-# Set date column to proper datetime format
-accuweather_df = set_datetime_as_index(accuweather_df, 'Date & Time')
-accuweather_meteo_df = set_datetime_as_index(accuweather_meteo_df, 'Date & Time')
+accuweather_df = pd.read_pickle('../../data/interim/01_accuweather_comparison_datetime_df.pkl')
+accuweather_meteo_df = pd.read_pickle('../../data/interim/01_accuweather_metero_comparison_datetime_df.pkl')
 
 # plot raw data
 plt.figure()
