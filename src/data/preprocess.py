@@ -1,22 +1,11 @@
-import sys
-import os
-
-# Get the absolute path of the root directory (adjust according to your specific structure)
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root path to sys.path
-sys.path.append(root_path)
+from pipeline.config import set_config
+set_config()
 
 import pandas as pd
 import numpy as np
 from glob import glob
-import matplotlib.pyplot as plt
 from data.datetime_utils import set_datetime_as_index
 import data.remove_outliers as remove_outliers
-
-plt.style.use('fivethirtyeight')
-plt.rcParams['figure.figsize'] = (20, 5)
-plt.rcParams['figure.dpi'] = 100
 
 def load_comparative_analysis_data():
   accuweather_df = pd.DataFrame()

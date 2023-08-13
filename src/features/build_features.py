@@ -1,27 +1,12 @@
-import sys
-import os
-
-# Get the absolute path of the root directory (adjust according to your specific structure)
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root path to sys.path
-sys.path.append(root_path)
+from pipeline.config import set_config
+set_config()
 
 import pandas as pd
-import numpy as np
-from glob import glob
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from sklearn.cluster import KMeans
-from data.datetime_utils import set_datetime_as_index
+from sklearn.preprocessing import MinMaxScaler
 from DataTransformation import PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
 from FrequencyAbstraction import FourierTransformation
-
-plt.style.use('fivethirtyeight')
-plt.rcParams['figure.figsize'] = (20, 5)
-plt.rcParams['figure.dpi'] = 100
 
 complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02.5_outlier_safe_complete_datetime_df.pkl')
 
@@ -35,23 +20,19 @@ complete_meteo_sensor_df['month'] = complete_meteo_sensor_df.index.month
 complete_meteo_sensor_df['day_of_week'] = complete_meteo_sensor_df.index.dayofweek
 complete_meteo_sensor_df['week_of_year'] = (complete_meteo_sensor_df.index.dayofyear - 1) // 7 + 1
 
-# proper scaling of all values 
-scaled_df = complete_meteo_sensor_df.copy()
 
-# just the column names
-cols_feature_eng = ['month', 'day_of_week', 'week_of_year']
-cols_to_minmax_scale = ['Barometer - hPa']
-cols_to_standard_scale = [col for col in scaled_df.columns if col not in cols_to_minmax_scale and col not in cols_feature_eng]
+# --------------------------------------------------------------
+# Let's Standardize The Whole Dataframe and Try Corrolation Again
+# As a sanity check, we should see the same results
+# --------------------------------------------------------------
+
+scaled_df = complete_meteo_sensor_df.copy()
 
 # Scale all of our features, 2 types
 min_max_scaler = MinMaxScaler()
-standard_scaler = StandardScaler()
 
-cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_minmax_scale])
-scaled_df[cols_to_minmax_scale] = cols_to_minmax_scale_values
-
-cols_to_standard_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_standard_scale])
-scaled_df[cols_to_standard_scale] = cols_to_standard_scale_values
+cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[predictor_columns])
+scaled_df[predictor_columns] = cols_to_minmax_scale_values
 
 # --------------------------------------------------------------
 # Principal component analysis PCA
@@ -173,8 +154,9 @@ df_frequency = pd.concat(df_freq_list).set_index('Date & Time', drop=True)
 # --------------------------------------------------------------
 
 df_frequency.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
-
+df_frequency.dropna(inplace=True)
 # :: means every other row
+# this is just another way to smooth out data
 df_frequency = df_frequency.iloc[::2]
 
 # --------------------------------------------------------------

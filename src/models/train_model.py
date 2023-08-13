@@ -1,43 +1,23 @@
-import sys
-import os
+from pipeline.config import set_config
+set_config()
 
-# Get the absolute path of the root directory (adjust according to your specific structure)
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root path to sys.path
-sys.path.append(root_path)
-from data.datetime_utils import set_datetime_as_index
 import pandas as pd
-import numpy as np
-from glob import glob
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.model_selection import train_test_split
 
-# --------------------------------------------------------------
-# Let's Standardize The Whole Dataframe and Try Corrolation Again
-# As a sanity check, we should see the same results
-# --------------------------------------------------------------
-scaled_df = final_df.copy()
+efficient_feature_df = pd.read_pickle('../../data/interim/03_data_features.pkl')
 
-# just the column names
-cols_to_minmax_scale = ['Barometer - hPa']
-cols_to_standard_scale = [col for col in scaled_df.columns if col not in cols_to_minmax_scale]
+# drop columns we will not use at all
+s1_drop_columns_for_training = ['Sensor1 (Ohms)', 'Sensor2 (Ohms)', 'Sensor2 Moisture (%)']
+s1_df_train = efficient_feature_df.drop(s1_drop_columns_for_training, axis=1)
 
-# Scale all of our features, 2 types
-min_max_scaler = MinMaxScaler()
-standard_scaler = StandardScaler()
+# drop columns we'll predict later
+s1_X = s1_df_train.drop(['Sensor1 Moisture (%)', ], axis=1)
+s1_y = s1_df_train[['Sensor1 Moisture (%)']]
 
-cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_minmax_scale])
-scaled_df[cols_to_minmax_scale] = cols_to_minmax_scale_values
+# providing seed. we take control of the stochastic split to reproduce
+s1_X_train, s1_X_test, s1_y_train, s1_y_test = train_test_split(s1_X, s1_y, test_size=0.25, random_state=42)
 
-cols_to_standard_scale_values = min_max_scaler.fit_transform(scaled_df[cols_to_standard_scale])
-scaled_df[cols_to_standard_scale] = cols_to_standard_scale_values
 
-# Plotting a heatmap for visualization
-scaled_correlation_matrix = scaled_df.corr(method='pearson')
-
-plt.figure(figsize=(12, 10))
-sns.heatmap(scaled_correlation_matrix, annot=True, cmap='coolwarm', linewidths=.5)
-plt.title("Scaled Correlation Heatmap")
-plt.show()

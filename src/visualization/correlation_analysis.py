@@ -1,21 +1,10 @@
-import sys
-import os
-
-# Get the absolute path of the root directory (adjust according to your specific structure)
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the root path to sys.path
-sys.path.append(root_path)
+from pipeline.config import set_config
+set_config()
 
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
-
-plt.style.use('fivethirtyeight')
-plt.rcParams['figure.figsize'] = (20, 5)
-plt.rcParams['figure.dpi'] = 100
 
 # -----------------------------------------------------------------
 # Corrolation Research To Find The Best Features For Model Training
