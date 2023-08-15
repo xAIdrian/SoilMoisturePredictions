@@ -1,24 +1,78 @@
-from pipeline.config import set_config
-set_config()
+import sys
+import os
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_path)
 
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from DataTransformation import PrincipalComponentAnalysis
 from TemporalAbstraction import NumericalAbstraction
-from FrequencyAbstraction import FourierTransformation
+from pipeline.config import set_config
+set_config()
 
-complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02.5_outlier_safe_complete_datetime_df.pkl')
+moist_complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02_outlier_safe_complete_datetime_df.pkl')
 
-predictor_columns = list(['Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
-       'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h',
-       'Heat Index - C', 'THW Index - C', 'Rain - mm', 'Heating Degree Days',
-       'Cooling Degree Days']    )  
+predictor_columns = list([
+  'Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
+  'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h', 'Heat Index - C', 
+  'THW Index - C', 'Rain - mm', 'Heating Degree Days', 'Cooling Degree Days'
+])  
 
-# feature engineering
-complete_meteo_sensor_df['month'] = complete_meteo_sensor_df.index.month
-complete_meteo_sensor_df['day_of_week'] = complete_meteo_sensor_df.index.dayofweek
-complete_meteo_sensor_df['week_of_year'] = (complete_meteo_sensor_df.index.dayofyear - 1) // 7 + 1
+interaction_columns = list([
+  'temp_hum_interaction','barometer_temp_interaction', 'wind_temp_interaction',
+  'dew_hum_interaction', 'heat_cool_interaction','rain_wind_interaction', 
+  'sensor1_temp_hum_interaction', 'sensor2_temp_hum_interaction', 'overall_moisture_index'
+])
+
+lag_columns = list([
+  'Barometer - hPa_lag_1_day', 'Hum - %_lag_1_day',
+  'Dew Point - C_lag_1_day', 'Wet Bulb - C_lag_1_day', 
+])
+
+#--------------------------------------------------------------
+# Understanding a lag in our time series. Narrow scope, we try
+# 1, 3, 5, 7, 10 day features
+# We'll start with 1 & 7 days
+# --------------------------------------------------------------
+
+lagged_df = moist_complete_meteo_sensor_df.copy()
+
+core_feature_columns = ['Barometer - hPa', 'Hum - %', 'Dew Point - C', 'Wet Bulb - C']
+# 96, 15 minute intervals in a day
+for col in core_feature_columns:
+    lagged_df[f"{col}_lag_1_day"] = lagged_df[col].shift(96)
+
+# 672, 15 minute intervals in a week
+for col in core_feature_columns:
+    moist_complete_meteo_sensor_df[f"{col}_lag_7_days"] = lagged_df[col].shift(672)
+
+lagged_df['month'] = lagged_df.index.month
+lagged_df['day_of_week'] = lagged_df.index.dayofweek
+lagged_df['week_of_year'] = (lagged_df.index.dayofyear - 1) // 7 + 1
+
+# --------------------------------------------------------------
+# Feature Interactions
+# --------------------------------------------------------------
+
+action_df = lagged_df.copy()
+# Interaction between Temperature and Humidity (Likely to Influence Soil Moisture)
+action_df['temp_hum_interaction'] = action_df['Temp - C'] * action_df['Hum - %']
+# Barometer and Temperature Interaction (Pressure and Temperature Correlation)
+action_df['barometer_temp_interaction'] = action_df['Barometer - hPa'] * action_df['Temp - C']
+# Wind Speed and Temperature Interaction (Possible Influence on Evaporation)
+action_df['wind_temp_interaction'] = action_df['Wind Speed - km/h'] * action_df['Temp - C']
+# Dew Point and Humidity Interaction (Moisture Interaction)
+action_df['dew_hum_interaction'] = action_df['Dew Point - C'] * action_df['Hum - %']
+# Heating and Cooling Degree Days Interaction with Temperature (Energy Considerations)
+action_df['heat_cool_interaction'] = action_df['Heating Degree Days'] * action_df['Cooling Degree Days'] * action_df['Temp - C']
+# Rain and Wind Speed Interaction (Weather Condition Correlation)
+action_df['rain_wind_interaction'] = action_df['Rain - mm'] * action_df['Wind Speed - km/h']
+# Sensor Readings (Ohms) Interaction with Temperature and Humidity (Soil Condition)
+action_df['sensor1_temp_hum_interaction'] = action_df['Sensor1 (Ohms)'] * action_df['Temp - C'] * action_df['Hum - %']
+action_df['sensor2_temp_hum_interaction'] = action_df['Sensor2 (Ohms)'] * action_df['Temp - C'] * action_df['Hum - %']
+# Overall Moisture Index (Combining Soil and Atmospheric Moisture)
+action_df['overall_moisture_index'] = (action_df['Sensor1 Moisture (%)'] + action_df['Sensor2 Moisture (%)'])/2 * action_df['Hum - %']
 
 
 # --------------------------------------------------------------
@@ -26,141 +80,37 @@ complete_meteo_sensor_df['week_of_year'] = (complete_meteo_sensor_df.index.dayof
 # As a sanity check, we should see the same results
 # --------------------------------------------------------------
 
-scaled_df = complete_meteo_sensor_df.copy()
+scaled_df = action_df.copy()
 
 # Scale all of our features, 2 types
 min_max_scaler = MinMaxScaler()
 
-cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[predictor_columns])
-scaled_df[predictor_columns] = cols_to_minmax_scale_values
+cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[predictor_columns + interaction_columns + lag_columns])
+scaled_df[predictor_columns + interaction_columns + lag_columns] = cols_to_minmax_scale_values
 
-# --------------------------------------------------------------
-# Principal component analysis PCA
-# --------------------------------------------------------------
+# Checking for any remaining missing values in the dataset
+missing_values_remaining = scaled_df.isnull().sum().sort_values(ascending=False)
+missing_values_remaining[missing_values_remaining > 0]
 
-df_pca = scaled_df.copy()
-pca = PrincipalComponentAnalysis()
+missing_values_after_scale = scaled_df.isnull().any().any()
+missing_values_after_scale
 
-# Paper reports ptimal amount of principle components is 5. 
-# Let's test this
+# Removing rows with any missing values associated with LAG
+data_cleaned = scaled_df.dropna()
 
-pc_values = pca.determine_pc_explained_variance(complete_meteo_sensor_df, predictor_columns)
+# Confirming that there are no remaining missing values in the cleaned dataset
+missing_values_after_removal = data_cleaned.isnull().any().any()
+num_rows_removed = scaled_df.shape[0] - data_cleaned.shape[0]
 
-# elbow techniques to find best number of PCs
-# capture the most variance without incorporating too much noise
-plt.figure(figsize=(12, 6))
-plt.plot(range(1, len(pc_values) + 1), pc_values, marker='o', linestyle='--')
-plt.xlabel('Number of Principal Components')
-plt.ylabel('Explained Variance')
-plt.title('Explained Variance vs Number of Components')
-plt.show()
+missing_values_after_removal, num_rows_removed, data_cleaned.shape
 
-# looks like 4 components is what we want
-# we may need to come back and look at 
-df_pca = pca.apply_pca(complete_meteo_sensor_df, predictor_columns, 5)
-df_pca.head(1000)[['pca_1', 'pca_2', 'pca_3', 'pca_4', 'pca_5']].plot()
-
-# --------------------------------------------------------------
-# Temporal abstraction
-# --------------------------------------------------------------
-
-df_temporal = df_pca.copy()
-NumAbs = NumericalAbstraction()
-
-# how many values we want to look back
-# 96 window size is one day. 4 window = 1 hour * 24 hours = 96 window
-window_size = 96 
-
-for col in predictor_columns:
-  df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'mean')
-  df_temporal = NumAbs.abstract_numerical(df_temporal, [col], window_size, 'std')
-
-# --------------------------------------------------------------
-# Plotting
-
-feb_subset = df_temporal[df_temporal['month'] == 2]
-
-ax1 = feb_subset[['Temp - C', 'Temp - C_temp_std_ws_96', 'Temp - C_temp_mean_ws_96']].plot()
-ax1.set_title('February - Temperature Analysis Temporal Abstraction Daily')
-ax1.set_xlabel('Date & Time')
-ax1.set_ylabel('Temperature (°C)')
-
-march_subset = df_temporal[df_temporal['month'] == 3]
-
-ax2 = march_subset[['Hum - %', 'Hum - %_temp_std_ws_96', 'Hum - %_temp_mean_ws_96']].plot()
-ax2.set_title('March - Humidity Analysis Temporal Abstraction Daily')
-ax2.set_xlabel('Date & Time')
-ax2.set_ylabel('Humidity (%)')
-
-april_subset = df_temporal[df_temporal['month'] == 4]
-
-ax3 = april_subset[['THW Index - C', 'THW Index - C_temp_std_ws_96', 'THW Index - C_temp_mean_ws_96']].plot()
-ax3.set_title('April - Temperature Analysis Temporal Abstraction Daily')
-ax3.set_xlabel('Date & Time')
-ax3.set_ylabel('THW Index (°C)')
-
-may_subset = df_temporal[df_temporal['month'] == 5]
-
-ax4 = may_subset[['Dew Point - C', 'Dew Point - C_temp_std_ws_96', 'Dew Point - C_temp_mean_ws_96']].plot()
-ax4.set_title('May - Humidity Analysis Temporal Abstraction Daily')
-ax4.set_xlabel('Date & Time')
-ax4.set_ylabel('Dew Point (C)')
-
-# --------------------------------------------------------------
-# Frequency features
-# --------------------------------------------------------------
-
-df_frequency = df_temporal.copy().reset_index()
-FreqAbs = FourierTransformation()
-
-# sampling rate is one hour
-# window size is one day
-sampling_rate = 4
-window_size = 96
-
-df_frequency = FreqAbs.abstract_frequency(df_frequency, ['Temp - C'], window_size, sampling_rate)
-
-subset = df_frequency[df_frequency['week_of_year'] == 11]
-subset[['Temp - C']].plot()
-subset[[
-  'Temp - C_max_freq',
-  'Temp - C_freq_weighted',
-  'Temp - C_pse',
-  'Temp - C_freq_1.625_Hz_ws_96',
-  'Temp - C_freq_2.0_Hz_ws_96'
-]].plot()
-subset[[
-  'Temp - C_max_freq',
-  'Temp - C_freq_weighted',
-  'Temp - C_pse'
-]].plot()
-subset[[
-  'Temp - C_freq_1.625_Hz_ws_96',
-  'Temp - C_freq_2.0_Hz_ws_96'
-]].plot()
-
-df_freq_list = []
-for week in df_frequency['week_of_year'].unique():
-  print(f"Applying Fourier Transformation to Week #{week}")
-  curr_subset = df_frequency[df_frequency['week_of_year'] == week].reset_index(drop=True).copy()
-  curr_subset = FreqAbs.abstract_frequency(curr_subset, predictor_columns, window_size, sampling_rate)
-  df_freq_list.append(curr_subset)
-
-df_frequency = pd.concat(df_freq_list).set_index('Date & Time', drop=True)
-
-# --------------------------------------------------------------
-# Dealing with overlapping windows to reduce overfitting
-# use the 50% window overlap rule. allowed with larger datasets
-# --------------------------------------------------------------
-
-df_frequency.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
-df_frequency.dropna(inplace=True)
-# :: means every other row
-# this is just another way to smooth out data
-df_frequency = df_frequency.iloc[::2]
+if missing_values_after_removal == False:
+  scaled_df = data_cleaned
+else:
+  raise Exception('Missing values still exist in the dataset')
 
 # --------------------------------------------------------------
 # Export dataset
 # --------------------------------------------------------------
 
-df_frequency.to_pickle('../../data/interim/03_data_features.pkl')
+scaled_df.to_pickle('../../data/interim/03_data_features.pkl')

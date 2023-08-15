@@ -1,9 +1,13 @@
-from pipeline.config import set_config
-set_config()
+import sys
+import os
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_path)
 
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
+from pipeline.config import set_config
+set_config()
 
 accuweather_df = pd.read_pickle('../../data/interim/01_accuweather_comparison_datetime_df.pkl')
 accuweather_meteo_df = pd.read_pickle('../../data/interim/01_accuweather_metero_comparison_datetime_df.pkl')

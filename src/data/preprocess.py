@@ -1,11 +1,15 @@
-from pipeline.config import set_config
-set_config()
+import sys
+import os
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(root_path)
 
 import pandas as pd
 import numpy as np
 from glob import glob
 from data.datetime_utils import set_datetime_as_index
 import data.remove_outliers as remove_outliers
+from pipeline.config import set_config
+set_config()
 
 def load_comparative_analysis_data():
   accuweather_df = pd.DataFrame()
@@ -92,12 +96,12 @@ complete_meteo_sensor_df = pd.merge(meteo_model_resampled, sensor_merged, left_i
 # remove the null values
 complete_meteo_sensor_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
-complete_meteo_sensor_df.to_pickle('../../data/interim/02_complete_meteo_sensors_datetime_df.pkl')
-
 def resistance_to_moisture(resistance):
-    if resistance < 50000:
-        # Assuming a linear decrease from 100% at 0 Ohms to 0% at 50,000 Ohms
-        return 100 - (resistance / 50000) * 100
+    if resistance <= 2000:
+        return 100.00
+    elif resistance < 55000:
+        # Assuming a linear decrease from 100% at 2000 Ohms to 0% at 55,000 Ohms
+        return 100 - ((resistance - 2000) / (55000 - 2000)) * 100
     else:
         return 0.00
 
@@ -138,6 +142,7 @@ for column in real_outlier_columns:
 
 # remove the null values
 outlier_safe_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+outlier_safe_df.drop('outlier_lof', axis=1, inplace=True)
 
-outlier_safe_df.to_pickle('../../data/interim/02.5_outlier_safe_complete_datetime_df.pkl')
+outlier_safe_df.to_pickle('../../data/interim/02_outlier_safe_complete_datetime_df.pkl')
 
