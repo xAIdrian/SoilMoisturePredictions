@@ -97,10 +97,10 @@ def train_evaluate_lstm(
   cv_scores_rmse = []
 
   # Callbacks
-  callbacks = [
-    EarlyStopping(monitor='val_loss', patience=20),
-    # ModelCheckpoint(filepath, monitor='loss', save_best_only=True, mode='min')
-  ]
+  # callbacks = [
+  #   EarlyStopping(monitor='val_loss', patience=20),
+  #   ModelCheckpoint(filepath, monitor='loss', save_best_only=True, mode='min')
+  # ]
   
   # K-fold cross-validation
   for train_index, val_index in kf.split(X_scaled):
@@ -111,11 +111,13 @@ def train_evaluate_lstm(
     CV_X_val = CV_X_val.reshape(CV_X_val.shape[0], 1, CV_X_val.shape[1])
     
     model = create_lstm_model((CV_X_train.shape[1], CV_X_train.shape[2]))
-    model.fit(CV_X_train, CV_y_train, epochs=epochs, callbacks=callbacks, batch_size=batch_size, verbose=0)
+    model.fit(CV_X_train, CV_y_train, epochs=epochs, batch_size=batch_size, verbose=0)
     
     y_pred_val_scaled = model.predict(CV_X_val)
     y_pred_val = scaler_y.inverse_transform(y_pred_val_scaled).flatten()
-    
+
+    print(pd.DataFrame(data={'Train Predictions': y_pred_val, 'Actuals': CV_y_train}))
+
     mae = mean_absolute_error(y_scaled[val_index], y_pred_val)
     rmse = np.sqrt(mean_squared_error(y_scaled[val_index], y_pred_val))
     cv_scores_mae.append(mae)
