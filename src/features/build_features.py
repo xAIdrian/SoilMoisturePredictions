@@ -13,7 +13,7 @@ set_config()
 
 moist_complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02_outlier_safe_complete_datetime_df.pkl')
 
-predictor_columns = list([
+basic_columns = list([
   'Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
   'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h', 'Heat Index - C', 
   'THW Index - C', 'Rain - mm', 'Heating Degree Days', 'Cooling Degree Days'
@@ -85,8 +85,8 @@ scaled_df = action_df.copy()
 # Scale all of our features, 2 types
 min_max_scaler = MinMaxScaler()
 
-cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[predictor_columns + interaction_columns + lag_columns])
-scaled_df[predictor_columns + interaction_columns + lag_columns] = cols_to_minmax_scale_values
+cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[basic_columns + interaction_columns + lag_columns])
+scaled_df[basic_columns + interaction_columns + lag_columns] = cols_to_minmax_scale_values
 
 # Checking for any remaining missing values in the dataset
 missing_values_remaining = scaled_df.isnull().sum().sort_values(ascending=False)
