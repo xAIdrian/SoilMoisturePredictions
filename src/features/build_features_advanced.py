@@ -9,7 +9,11 @@ from TemporalAbstraction import NumericalAbstraction
 from pipeline.config import set_config
 set_config()
 
-# complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02.5_interactions_safe_complete_datetime_df.pkl')
+complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02.5_interactions_safe_complete_datetime_df.pkl')
+
+lagged_df['month'] = lagged_df.index.month
+lagged_df['day_of_week'] = lagged_df.index.dayofweek
+lagged_df['week_of_year'] = (lagged_df.index.dayofyear - 1) // 7 + 1
 
 # --------------------------------------------------------------
 # Principal component analysis PCA

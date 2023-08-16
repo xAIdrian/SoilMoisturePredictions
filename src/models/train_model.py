@@ -11,6 +11,9 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from keras import backend as K
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from pipeline.config import set_config
 import matplotlib.pyplot as plt
@@ -18,20 +21,6 @@ import pandas as pd
 import numpy as np
 set_config()
 
-efficient_feature_df = pd.read_pickle('../../data/interim/03_data_features.pkl')
-
-# drop columns we will not use at all
-s1_drop_columns_for_training = ['Sensor1 (Ohms)', 'Sensor2 (Ohms)', 'Sensor2 Moisture (%)']
-s1_df_train = efficient_feature_df.drop(s1_drop_columns_for_training, axis=1)
-
-# drop columns we'll predict later
-X = s1_df_train.drop(['Sensor1 Moisture (%)', ], axis=1)
-y = s1_df_train[['Sensor1 Moisture (%)']]
-
-# providing seed. we take control of the stochastic split to reproduce
-# s1_X_train, s1_X_test, s1_y_train, s1_y_test = train_test_split(
-#   s1_X, s1_y, test_size=0.25, random_state=42, #stratify=s1_y
-# )
 # Splitting the data into training and testing sets (80% training, 20% testing) in chronological order
 def dataset_splitter(X, y, train_size=0.8):
   train_size = int(len(X) * 0.8)
@@ -41,7 +30,6 @@ def dataset_splitter(X, y, train_size=0.8):
   X_train.shape, X_test.shape, y_train.shape, y_test.shape
   
   return X_train, X_test, y_train, y_test  
-
 
 # --------------------------------------------------------------
 # Get a visualizatino of how our test set has been split
@@ -66,22 +54,72 @@ def dataset_splitter(X, y, train_size=0.8):
 # plt.show()
 
 # --------------------------------------------------------------
-# Let's begin training
+# Baseline: Linear Regression
 # --------------------------------------------------------------
 
-def train_evaluate_lstm(
-  X_scaled,
-  y_scaled,
-  n_splits=5,
-  epochs=50,
-  batch_size=32
+# Function to train and evaluate Simple Linear Regression
+def train_evaluate_linear_regression(X_train, y_train, X_test, y_test):
+    # Initializing TimeSeriesSplit for cross-validation
+    tscv = TimeSeriesSplit(n_splits=5)
+
+    # Initializing Linear Regression model
+    model = LinearRegression()
+
+    # Cross-validation scores
+    cv_scores_mae = []
+    cv_scores_rmse = []
+
+    # Time-series cross-validation
+    for train_index, val_index in tscv.split(X_train):
+        CV_X_train, CV_X_val = X_train.iloc[train_index], X_train.iloc[val_index]
+        CV_y_train, CV_y_val = y_train.iloc[train_index], y_train.iloc[val_index]
+
+        # Fitting the model
+        model.fit(CV_X_train, CV_y_train)
+
+        # Predicting on the validation set
+        y_pred_val = model.predict(CV_X_val)
+
+        # Calculating MAE and RMSE for the validation set
+        mae = mean_absolute_error(CV_y_val, y_pred_val)
+        rmse = np.sqrt(mean_squared_error(CV_y_val, y_pred_val))
+
+        # Storing the scores
+        cv_scores_mae.append(mae)
+        cv_scores_rmse.append(rmse)
+
+    # Training the model on the full training set
+    model.fit(X_train, y_train)
+
+    # Predicting on the test set
+    y_pred_test = model.predict(X_test)
+
+    # Calculating MAE and RMSE for the test set
+    test_mae = mean_absolute_error(y_test, y_pred_test)
+    test_rmse = np.sqrt(mean_squared_error(y_test, y_pred_test))
+
+    results = {
+        'cv_mae': np.mean(cv_scores_mae),
+        'cv_rmse': np.mean(cv_scores_rmse),
+        'test_mae': test_mae,
+        'test_rmse': test_rmse
+    }
+
+    return model, results
+
+# --------------------------------------------------------------
+# LSTM Model
+# --------------------------------------------------------------
+
+def train_evaluate_kfold_lstm(
+  X_train, y_train, n_splits=5,epochs=50,batch_size=32
 ):
 
   # Scaling the data
   scaler_X = MinMaxScaler()
-  X_scaled = scaler_X.fit_transform(X_scaled)
+  X_train = scaler_X.fit_transform(X_train)
   scaler_y = MinMaxScaler()
-  y_scaled = scaler_y.fit_transform(y_scaled.values.reshape(-1, 1))
+  y_train = scaler_y.fit_transform(y_train.values.reshape(-1, 1))
 
   # Function to create LSTM model
   def create_lstm_model(input_shape):
@@ -93,33 +131,39 @@ def train_evaluate_lstm(
 
   # Initializing KFold for cross-validation
   kf = KFold(n_splits=n_splits, shuffle=False)
+
   cv_scores_mae = []
   cv_scores_rmse = []
 
-  # Callbacks
-  # callbacks = [
-  #   EarlyStopping(monitor='val_loss', patience=20),
-  #   ModelCheckpoint(filepath, monitor='loss', save_best_only=True, mode='min')
-  # ]
+  # train_predictions = []  # to store train predictions
+  # val_predictions = []  # to store validation predictions
   
-  # K-fold cross-validation
-  for train_index, val_index in kf.split(X_scaled):
+  # K-fold cross-validation. training & validation split
+  for train_index, val_index in kf.split(X_train):
 
-    CV_X_train, CV_X_val = X_scaled[train_index], X_scaled[val_index]
-    CV_y_train, CV_y_val = y_scaled[train_index], y_scaled[val_index]
+    # prep data for model
+    CV_X_train, CV_X_val = X_train[train_index], X_train[val_index]
+    CV_y_train, CV_y_val = y_train[train_index], y_train[val_index]
+
     CV_X_train = CV_X_train.reshape(CV_X_train.shape[0], 1, CV_X_train.shape[1])
     CV_X_val = CV_X_val.reshape(CV_X_val.shape[0], 1, CV_X_val.shape[1])
     
+    # actual ML
     model = create_lstm_model((CV_X_train.shape[1], CV_X_train.shape[2]))
     model.fit(CV_X_train, CV_y_train, epochs=epochs, batch_size=batch_size, verbose=0)
     
     y_pred_val_scaled = model.predict(CV_X_val)
+    # y_pred_train_scaled = model.predict(CV_X_train)
+
+    # invert scaling for train predictions, back to original form
     y_pred_val = scaler_y.inverse_transform(y_pred_val_scaled).flatten()
+    # y_pred_train = scaler_y.inverse_transform(y_pred_train_scaled).flatten() 
 
-    print(pd.DataFrame(data={'Train Predictions': y_pred_val, 'Actuals': CV_y_train}))
+    # train_predictions.append(y_pred_train)
+    # val_predictions.append(y_pred_val)
 
-    mae = mean_absolute_error(y_scaled[val_index], y_pred_val)
-    rmse = np.sqrt(mean_squared_error(y_scaled[val_index], y_pred_val))
+    mae = mean_absolute_error(y_train[val_index], y_pred_val)
+    rmse = np.sqrt(mean_squared_error(y_train[val_index], y_pred_val))
     cv_scores_mae.append(mae)
     cv_scores_rmse.append(rmse)
     
@@ -127,15 +171,40 @@ def train_evaluate_lstm(
 
   results = {
       'cv_mae': np.mean(cv_scores_mae),
-      'cv_rmse': np.mean(cv_scores_rmse)
+      'cv_rmse': np.mean(cv_scores_rmse),
+      # 'train_predictions': np.concatenate(train_predictions),  
+      # 'val_predictions': np.concatenate(val_predictions)  
   }
 
   return results
+
+# LSTM
+def train_evaluate_simple_lstm(X_train, y_train, X_test, epochs=50, batch_size=32):
+    # Reshaping the data
+    X_train_reshaped = X_train.values.reshape((X_train.shape[0], 1, X_train.shape[1]))
+    X_test_reshaped = X_test.values.reshape((X_test.shape[0], 1, X_test.shape[1]))
+
+    # Building the LSTM model
+    model = Sequential()
+    model.add(LSTM(50, activation='relu', input_shape=(X_train_reshaped.shape[1], X_train_reshaped.shape[2])))
+    model.add(Dense(1))
+    model.compile(optimizer='adam', loss='mse')
+
+    # Fitting the model
+    model.fit(X_train_reshaped, y_train, epochs=epochs, batch_size=batch_size, verbose=0)
+
+    # Predicting
+    train_predictions = model.predict(X_train_reshaped)
+    test_predictions = model.predict(X_test_reshaped)
+
+    return train_predictions.flatten(), test_predictions.flatten()
 
 # --------------------------------------------------------------
 # We will divide our features into subsets to see if the additional
 # features we engineered help our predictive performance of our model.
 # --------------------------------------------------------------
+
+efficient_feature_df = pd.read_pickle('../../data/interim/03_data_features.pkl')
 
 basic_features = [
   'Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
@@ -154,25 +223,39 @@ lag_features = [
   'Dew Point - C_lag_1_day', 'Wet Bulb - C_lag_1_day', 
 ]
 
-# TODO: go back and perform this eng. do we need them?
-# square features = [] 
-# cluster features = []
-# pca_features = ['pca_1', 'pca_2', 'pca_3', 'pca_4', 'pca_5']
-# need a list comprehension to access these
-# time_features = [f for f in s1_df_train.columns if '_temp_' in f]
-# frequency_features = [f for f in s1_df_train.columns if ('_freq' in f) or ('_pse_' in f)]
-
 print(f'Basic Features: {len(basic_features)}')
 print(f'Interaction Features: {len(interaction_features)}')
 print(f'Lag Features: {len(lag_features)}')
 
+# drop columns we will not use at all
+s1_drop_columns_for_training = ['Sensor2 (Ohms)', 'Sensor1 Moisture (%)', 'Sensor2 Moisture (%)']
+s1_df_train = efficient_feature_df.drop(s1_drop_columns_for_training, axis=1)
+
+# drop columns we'll predict later
+X = s1_df_train.drop(['Sensor1 (Ohms)', ], axis=1)
+y = s1_df_train[['Sensor1 (Ohms)']]
+
 # use this later on to use different data selections
 feature_set_1 = list(set(basic_features))
-feature_set_2 = list(set(basic_features + interaction_features)) # + square_features 
-feature_set_3 = list(set(feature_set_2 + lag_features))
+feature_set_2 = list(set(feature_set_1 + interaction_features)) 
+feature_set_3 = list(set(feature_set_1 + lag_features))
+feature_set_4 = list(set(feature_set_2 + lag_features))
 
-feature_set_1_df = efficient_feature_df[feature_set_1]
-X_train, X_test, y_train, y_test = dataset_splitter(feature_set_1_df, y)
+pretraining_set_X = X[feature_set_4]
 
-lstm_results = train_evaluate_lstm(X_train, y_train)
-print(lstm_results)
+X_train, X_test, y_train, y_test = dataset_splitter(
+   pretraining_set_X, y
+)
+
+# Training and evaluating the Simple Linear Regression model
+# linear_model, linear_results = train_evaluate_linear_regression(X_train, y_train, X_test, y_test)
+# print("Linear Regression Baseline")
+# print(linear_results)
+
+# lstm_train_results, lstm_test_results = train_evaluate_simple_lstm(X_train, y_train, X_test)
+# print("LSTM Performance Results")
+# print(f"Train: {lstm_train_results}, Test: {lstm_test_results}")
+
+kfold_lstm_results = train_evaluate_kfold_lstm(X_train, y_train)
+print("LSTM KFold Performance Results")
+print(kfold_lstm_results)

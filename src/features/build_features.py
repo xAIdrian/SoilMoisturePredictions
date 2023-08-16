@@ -4,31 +4,11 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_path)
 
 import pandas as pd
-import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from DataTransformation import PrincipalComponentAnalysis
-from TemporalAbstraction import NumericalAbstraction
 from pipeline.config import set_config
 set_config()
 
 moist_complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02_outlier_safe_complete_datetime_df.pkl')
-
-basic_columns = list([
-  'Barometer - hPa', 'Temp - C', 'High Temp - C', 'Low Temp - C',
-  'Hum - %', 'Dew Point - C', 'Wet Bulb - C', 'Wind Speed - km/h', 'Heat Index - C', 
-  'THW Index - C', 'Rain - mm', 'Heating Degree Days', 'Cooling Degree Days'
-])  
-
-interaction_columns = list([
-  'temp_hum_interaction','barometer_temp_interaction', 'wind_temp_interaction',
-  'dew_hum_interaction', 'heat_cool_interaction','rain_wind_interaction', 
-  'sensor1_temp_hum_interaction', 'sensor2_temp_hum_interaction', 'overall_moisture_index'
-])
-
-lag_columns = list([
-  'Barometer - hPa_lag_1_day', 'Hum - %_lag_1_day',
-  'Dew Point - C_lag_1_day', 'Wet Bulb - C_lag_1_day', 
-])
 
 #--------------------------------------------------------------
 # Understanding a lag in our time series. Narrow scope, we try
@@ -46,10 +26,6 @@ for col in core_feature_columns:
 # 672, 15 minute intervals in a week
 for col in core_feature_columns:
     moist_complete_meteo_sensor_df[f"{col}_lag_7_days"] = lagged_df[col].shift(672)
-
-lagged_df['month'] = lagged_df.index.month
-lagged_df['day_of_week'] = lagged_df.index.dayofweek
-lagged_df['week_of_year'] = (lagged_df.index.dayofyear - 1) // 7 + 1
 
 # --------------------------------------------------------------
 # Feature Interactions
@@ -76,17 +52,21 @@ action_df['overall_moisture_index'] = (action_df['Sensor1 Moisture (%)'] + actio
 
 
 # --------------------------------------------------------------
-# Let's Standardize The Whole Dataframe and Try Corrolation Again
+# Let's Normalilze The Whole Dataframe and Try Corrolation Again
 # As a sanity check, we should see the same results
 # --------------------------------------------------------------
 
 scaled_df = action_df.copy()
+datetime = scaled_df.index
 
 # Scale all of our features, 2 types
-min_max_scaler = MinMaxScaler()
+scaler = MinMaxScaler()
 
-cols_to_minmax_scale_values = min_max_scaler.fit_transform(scaled_df[basic_columns + interaction_columns + lag_columns])
-scaled_df[basic_columns + interaction_columns + lag_columns] = cols_to_minmax_scale_values
+# Fit and transform the scaler on the DataFrame
+scaled_values = scaler.fit_transform(scaled_df)
+# Convert back to DataFrame w/ datetime index
+scaled_df = pd.DataFrame(scaled_values, columns=scaled_df.columns)
+scaled_df.index = datetime
 
 # Checking for any remaining missing values in the dataset
 missing_values_remaining = scaled_df.isnull().sum().sort_values(ascending=False)
