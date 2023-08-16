@@ -17,6 +17,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from pipeline.config import set_config
 import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
 import numpy as np
 set_config()
@@ -134,9 +135,6 @@ def train_evaluate_kfold_lstm(
 
   cv_scores_mae = []
   cv_scores_rmse = []
-
-  train_predictions = []  # to store train predictions
-  val_predictions = []  # to store validation predictions
   
   # K-fold cross-validation. training & validation split
   for train_index, val_index in kf.split(X_train):
@@ -153,14 +151,9 @@ def train_evaluate_kfold_lstm(
     model.fit(CV_X_train, CV_y_train, epochs=epochs, batch_size=batch_size, verbose=0)
     
     y_pred_val_scaled = model.predict(CV_X_val)
-    y_pred_train_scaled = model.predict(CV_X_train)
 
     # invert scaling for train predictions, back to original form
     y_pred_val = scaler_y.inverse_transform(y_pred_val_scaled).flatten()
-    y_pred_train = scaler_y.inverse_transform(y_pred_train_scaled).flatten() 
-
-    train_predictions.append(y_pred_train)
-    val_predictions.append(y_pred_val)
 
     mae = mean_absolute_error(y_train[val_index], y_pred_val)
     rmse = np.sqrt(mean_squared_error(y_train[val_index], y_pred_val))
@@ -171,9 +164,7 @@ def train_evaluate_kfold_lstm(
 
   results = {
       'train_cv_mae': np.mean(cv_scores_mae),
-      'train_cv_rmse': np.mean(cv_scores_rmse),
-      'train_predictions': np.concatenate(train_predictions),  
-      'val_predictions': np.concatenate(val_predictions)  
+      'train_cv_rmse': np.mean(cv_scores_rmse), 
   }
 
   return results
@@ -241,21 +232,74 @@ feature_set_2 = list(set(feature_set_1 + interaction_features))
 feature_set_3 = list(set(feature_set_1 + lag_features))
 feature_set_4 = list(set(feature_set_2 + lag_features))
 
-pretraining_set_X = X[feature_set_4]
+pretraining_set_X = X[feature_set_2]
 
 X_train, X_test, y_train, y_test = dataset_splitter(
    pretraining_set_X, y
 )
 
 # Training and evaluating the Simple Linear Regression model
-# linear_model, linear_results = train_evaluate_linear_regression(X_train, y_train, X_test, y_test)
-# print("Linear Regression Baseline")
-# print(linear_results)
+linear_model, linear_results = train_evaluate_linear_regression(X_train, y_train, X_test, y_test)
+print("Linear Regression Baseline")
+print(linear_results)
 
-# lstm_train_results, lstm_test_results = train_evaluate_simple_lstm(X_train, y_train, X_test)
-# print("LSTM Performance Results")
-# print(f"Train: {lstm_train_results}, Test: {lstm_test_results}")
+# kfold_lstm_results = train_evaluate_kfold_lstm(X_train, y_train)
+# print("LSTM KFold Performance Results")
+# print(kfold_lstm_results)
 
-kfold_lstm_results = train_evaluate_kfold_lstm(X_train, y_train)
-print("LSTM KFold Performance Results")
-print(kfold_lstm_results)
+lstm_train_results, lstm_test_results = train_evaluate_simple_lstm(X_train, y_train, X_test)
+lstm_mean_absolute_error = mean_absolute_error(y_test, lstm_test_results)
+lstm_mean_squared_error = mean_squared_error(y_test, lstm_test_results)
+print("LSTM Performance Results")
+print(f"LSTM Mean Absolute Error: {lstm_mean_absolute_error}")
+print(f"LSTM Mean Squared Error: {lstm_mean_squared_error}")
+
+# residuals_train = y_train - np.mean(lstm_train_results)
+# residuals_test = y_test - np.mean(lstm_test_results)
+
+array_series = pd.Series(lstm_test_results)
+array_series.index = y_test.index
+result = y_test.iloc[:, 0] - array_series
+result = y_test.apply(lambda x: x - array_series)
+
+residuals = y_test - lstm_test_results
+
+# Plot the residuals
+plt.figure(figsize=(8, 6))
+sns.residplot(x=lstm_test_results, y=result, lowess=True, scatter_kws={'s': 50}, line_kws={'color': 'red', 'lw': 2})
+plt.xlabel('Fitted values')
+plt.ylabel('Residuals')
+plt.title('Residual plot')
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.subplot(1, 2, 1)
+plt.scatter(y_train, residuals_train, alpha=0.5)
+plt.title('Training Residuals')
+plt.xlabel('Actual Values')
+plt.ylabel('Residuals')
+
+plt.subplot(1, 2, 2)
+plt.scatter(y_test, residuals_test, alpha=0.5)
+plt.title('Test Residuals')
+plt.xlabel('Actual Values')
+plt.ylabel('Residuals')
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.plot(y_test[:1000].values, label='Actual')
+plt.plot(lstm_test_results[:1000], label='Predicted')
+plt.title('Actual vs Predicted Values')
+plt.xlabel('Index')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
+
+plt.figure(figsize=(12, 6))
+plt.plot(y_test.values, label='Actual')
+plt.plot(lstm_test_results, label='Predicted')
+plt.title('Zoomed In Actual vs Predicted Values')
+plt.xlabel('Index')
+plt.ylabel('Value')
+plt.legend()
+plt.show()
