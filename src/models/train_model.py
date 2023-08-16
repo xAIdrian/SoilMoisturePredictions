@@ -135,8 +135,8 @@ def train_evaluate_kfold_lstm(
   cv_scores_mae = []
   cv_scores_rmse = []
 
-  # train_predictions = []  # to store train predictions
-  # val_predictions = []  # to store validation predictions
+  train_predictions = []  # to store train predictions
+  val_predictions = []  # to store validation predictions
   
   # K-fold cross-validation. training & validation split
   for train_index, val_index in kf.split(X_train):
@@ -153,14 +153,14 @@ def train_evaluate_kfold_lstm(
     model.fit(CV_X_train, CV_y_train, epochs=epochs, batch_size=batch_size, verbose=0)
     
     y_pred_val_scaled = model.predict(CV_X_val)
-    # y_pred_train_scaled = model.predict(CV_X_train)
+    y_pred_train_scaled = model.predict(CV_X_train)
 
     # invert scaling for train predictions, back to original form
     y_pred_val = scaler_y.inverse_transform(y_pred_val_scaled).flatten()
-    # y_pred_train = scaler_y.inverse_transform(y_pred_train_scaled).flatten() 
+    y_pred_train = scaler_y.inverse_transform(y_pred_train_scaled).flatten() 
 
-    # train_predictions.append(y_pred_train)
-    # val_predictions.append(y_pred_val)
+    train_predictions.append(y_pred_train)
+    val_predictions.append(y_pred_val)
 
     mae = mean_absolute_error(y_train[val_index], y_pred_val)
     rmse = np.sqrt(mean_squared_error(y_train[val_index], y_pred_val))
@@ -170,10 +170,10 @@ def train_evaluate_kfold_lstm(
     K.clear_session()
 
   results = {
-      'cv_mae': np.mean(cv_scores_mae),
-      'cv_rmse': np.mean(cv_scores_rmse),
-      # 'train_predictions': np.concatenate(train_predictions),  
-      # 'val_predictions': np.concatenate(val_predictions)  
+      'train_cv_mae': np.mean(cv_scores_mae),
+      'train_cv_rmse': np.mean(cv_scores_rmse),
+      'train_predictions': np.concatenate(train_predictions),  
+      'val_predictions': np.concatenate(val_predictions)  
   }
 
   return results
