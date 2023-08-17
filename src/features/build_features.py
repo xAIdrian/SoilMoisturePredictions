@@ -3,6 +3,7 @@ import os
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_path)
 
+import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from pipeline.config import set_config
@@ -31,56 +32,63 @@ for col in core_feature_columns:
 # Feature Interactions
 # --------------------------------------------------------------
 
-action_df = lagged_df.copy()
-# Interaction between Temperature and Humidity (Likely to Influence Soil Moisture)
-action_df['temp_hum_interaction'] = action_df['Temp - C'] * action_df['Hum - %']
-# Barometer and Temperature Interaction (Pressure and Temperature Correlation)
-action_df['barometer_temp_interaction'] = action_df['Barometer - hPa'] * action_df['Temp - C']
-# Wind Speed and Temperature Interaction (Possible Influence on Evaporation)
-action_df['wind_temp_interaction'] = action_df['Wind Speed - km/h'] * action_df['Temp - C']
-# Dew Point and Humidity Interaction (Moisture Interaction)
-action_df['dew_hum_interaction'] = action_df['Dew Point - C'] * action_df['Hum - %']
-# Heating and Cooling Degree Days Interaction with Temperature (Energy Considerations)
-action_df['heat_cool_interaction'] = action_df['Heating Degree Days'] * action_df['Cooling Degree Days'] * action_df['Temp - C']
-# Rain and Wind Speed Interaction (Weather Condition Correlation)
-action_df['rain_wind_interaction'] = action_df['Rain - mm'] * action_df['Wind Speed - km/h']
-# Sensor Readings (Ohms) Interaction with Temperature and Humidity (Soil Condition)
-action_df['sensor1_temp_hum_interaction'] = action_df['Sensor1 (Ohms)'] * action_df['Temp - C'] * action_df['Hum - %']
-action_df['sensor2_temp_hum_interaction'] = action_df['Sensor2 (Ohms)'] * action_df['Temp - C'] * action_df['Hum - %']
-# Overall Moisture Index (Combining Soil and Atmospheric Moisture)
-action_df['overall_moisture_index'] = (action_df['Sensor1 Moisture (%)'] + action_df['Sensor2 Moisture (%)'])/2 * action_df['Hum - %']
+# action_df = lagged_df.copy()
+# # Interaction between Temperature and Humidity (Likely to Influence Soil Moisture)
+# action_df['temp_hum_interaction'] = action_df['Temp - C'] * action_df['Hum - %']
+# # Barometer and Temperature Interaction (Pressure and Temperature Correlation)
+# action_df['barometer_temp_interaction'] = action_df['Barometer - hPa'] * action_df['Temp - C']
+# # Wind Speed and Temperature Interaction (Possible Influence on Evaporation)
+# action_df['wind_temp_interaction'] = action_df['Wind Speed - km/h'] * action_df['Temp - C']
+# # Dew Point and Humidity Interaction (Moisture Interaction)
+# action_df['dew_hum_interaction'] = action_df['Dew Point - C'] * action_df['Hum - %']
+# # Heating and Cooling Degree Days Interaction with Temperature (Energy Considerations)
+# action_df['heat_cool_interaction'] = action_df['Heating Degree Days'] * action_df['Cooling Degree Days'] * action_df['Temp - C']
+# # Rain and Wind Speed Interaction (Weather Condition Correlation)
+# action_df['rain_wind_interaction'] = action_df['Rain - mm'] * action_df['Wind Speed - km/h']
+# # Overall Moisture Index (Combining Soil and Atmospheric Moisture)
+# action_df['overall_moisture_index'] = (action_df['Sensor1 Moisture (%)'] + action_df['Sensor2 Moisture (%)'])/2 * action_df['Hum - %']
 
+# ---------------------------------------------------------
+# Cleaning our Data
+# ---------------------------------------------------------
+# data_cleaned = action_df.dropna()
+data_cleaned = lagged_df.dropna()
 
-# --------------------------------------------------------------
-# Let's Normalilze The Whole Dataframe and Try Corrolation Again
-# As a sanity check, we should see the same results
-# --------------------------------------------------------------
+# Checking for skewness in the features
+# feature_skewness = data_cleaned.skew().sort_values(ascending=False)
 
-scaled_df = action_df.copy()
-datetime = scaled_df.index
+# # Checking for missing values in the features
+# missing_values = data_cleaned.isnull().sum().sort_values(ascending=False)
+# feature_skewness, missing_values[missing_values > 0]
 
-# Scale all of our features, 2 types
-scaler = MinMaxScaler()
+# # Handling Skewness
 
-# Fit and transform the scaler on the DataFrame
-scaled_values = scaler.fit_transform(scaled_df)
-# Convert back to DataFrame w/ datetime index
-scaled_df = pd.DataFrame(scaled_values, columns=scaled_df.columns)
-scaled_df.index = datetime
+# # Identifying skewed features (excluding cyclic ones)
+# skewed_features = feature_skewness[feature_skewness.abs() > 0.5].index.drop(['month'])
 
-# Checking for any remaining missing values in the dataset
-missing_values_remaining = scaled_df.isnull().sum().sort_values(ascending=False)
-missing_values_remaining[missing_values_remaining > 0]
+# # Identifying columns that need a constant added before log transformation for only numeric columns
+# numeric_cols = data_cleaned.select_dtypes(include=[np.number])
+# cols_needing_constant = numeric_cols.columns[numeric_cols.min() <= 0]
 
-missing_values_after_scale = scaled_df.isnull().any().any()
-missing_values_after_scale
+# # Adding a small constant to make all values positive
+# for col in cols_needing_constant:
+#     data_cleaned[col] += abs(data_cleaned[col].min()) + 1e-2  # Adding a small constant for safety
 
-# Removing rows with any missing values associated with LAG
-data_cleaned = scaled_df.dropna()
+# # Applying the log transformation to the skewed features
+# for feature in skewed_features:
+#     data_cleaned[feature] = np.log1p(data_cleaned[feature])
+
+# # Checking for skewness after transformation
+# updated_feature_skewness = data_cleaned.skew(numeric_only=True).sort_values(ascending=False)
+
+# # Checking for missing values again
+# updated_missing_values = data_cleaned.isnull().sum().sort_values(ascending=False)
+
+# updated_feature_skewness, updated_missing_values[updated_missing_values > 0]
 
 # Confirming that there are no remaining missing values in the cleaned dataset
 missing_values_after_removal = data_cleaned.isnull().any().any()
-num_rows_removed = scaled_df.shape[0] - data_cleaned.shape[0]
+num_rows_removed = lagged_df.shape[0] - data_cleaned.shape[0]
 
 missing_values_after_removal, num_rows_removed, data_cleaned.shape
 
@@ -93,4 +101,4 @@ else:
 # Export dataset
 # --------------------------------------------------------------
 
-scaled_df.to_pickle('../../data/interim/03_data_features.pkl')
+data_cleaned.to_pickle('../../data/interim/03_data_features.pkl')
