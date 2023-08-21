@@ -5,8 +5,8 @@ sys.path.append(root_path)
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from DataTransformation import PrincipalComponentAnalysis
-from TemporalAbstraction import NumericalAbstraction
+from features.DataTransformation import PrincipalComponentAnalysis
+from features.TemporalAbstraction import NumericalAbstraction
 from pipeline.config import set_config
 set_config()
 

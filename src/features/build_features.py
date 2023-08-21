@@ -3,6 +3,7 @@ import os
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_path)
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
@@ -53,38 +54,6 @@ for col in core_feature_columns:
 # ---------------------------------------------------------
 # data_cleaned = action_df.dropna()
 data_cleaned = lagged_df.dropna()
-
-# Checking for skewness in the features
-# feature_skewness = data_cleaned.skew().sort_values(ascending=False)
-
-# # Checking for missing values in the features
-# missing_values = data_cleaned.isnull().sum().sort_values(ascending=False)
-# feature_skewness, missing_values[missing_values > 0]
-
-# # Handling Skewness
-
-# # Identifying skewed features (excluding cyclic ones)
-# skewed_features = feature_skewness[feature_skewness.abs() > 0.5].index.drop(['month'])
-
-# # Identifying columns that need a constant added before log transformation for only numeric columns
-# numeric_cols = data_cleaned.select_dtypes(include=[np.number])
-# cols_needing_constant = numeric_cols.columns[numeric_cols.min() <= 0]
-
-# # Adding a small constant to make all values positive
-# for col in cols_needing_constant:
-#     data_cleaned[col] += abs(data_cleaned[col].min()) + 1e-2  # Adding a small constant for safety
-
-# # Applying the log transformation to the skewed features
-# for feature in skewed_features:
-#     data_cleaned[feature] = np.log1p(data_cleaned[feature])
-
-# # Checking for skewness after transformation
-# updated_feature_skewness = data_cleaned.skew(numeric_only=True).sort_values(ascending=False)
-
-# # Checking for missing values again
-# updated_missing_values = data_cleaned.isnull().sum().sort_values(ascending=False)
-
-# updated_feature_skewness, updated_missing_values[updated_missing_values > 0]
 
 # Confirming that there are no remaining missing values in the cleaned dataset
 missing_values_after_removal = data_cleaned.isnull().any().any()

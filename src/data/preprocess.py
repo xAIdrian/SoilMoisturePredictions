@@ -96,20 +96,27 @@ complete_meteo_sensor_df = pd.merge(meteo_model_resampled, sensor_merged, left_i
 # remove the null values
 complete_meteo_sensor_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
-def resistance_to_moisture(resistance):
+def resistance_cutoff(resistance):
     if resistance <= 2000:
-        return 100.00
-    elif resistance < 55000:
-        # Assuming a linear decrease from 100% at 2000 Ohms to 0% at 55,000 Ohms
-        return 100 - ((resistance - 2000) / (55000 - 2000)) * 100
+        return 2000
+    elif resistance >= 50000:
+        return 50000
     else:
-        return 0.00
+        return resistance
+
+def resistance_to_moisture(resistance):
+    return 100 - ((resistance - 2000) / (50000 - 2000)) * 100
+
+#--------------------------------------------------------------
+# Remove The highest values and set moisture
+#--------------------------------------------------------------
 
 moist_meteo_sensor_df = complete_meteo_sensor_df.copy()
 # Apply the custom function to your dataframe (assuming df is your dataframe containing resistance values)
+moist_meteo_sensor_df['Sensor1 (Ohms)'] = moist_meteo_sensor_df['Sensor1 (Ohms)'].apply(resistance_cutoff)
+moist_meteo_sensor_df['Sensor2 (Ohms)'] = moist_meteo_sensor_df['Sensor2 (Ohms)'].apply(resistance_cutoff)
 moist_meteo_sensor_df['Sensor1 Moisture (%)'] = moist_meteo_sensor_df['Sensor1 (Ohms)'].apply(resistance_to_moisture)
 moist_meteo_sensor_df['Sensor2 Moisture (%)'] = moist_meteo_sensor_df['Sensor2 (Ohms)'].apply(resistance_to_moisture)
-
 
 # --------------------------------------------------------------
 # Removing Outliers

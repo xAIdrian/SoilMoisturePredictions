@@ -29,6 +29,7 @@ def resistance_to_moisture(resistance):
         return 100 - ((resistance - 2000) / (55000 - 2000)) * 100
     else:
         return 0.00
+    
 vectorized_res_to_moist = np.vectorize(resistance_to_moisture)
 
 # Splitting the data into training and testing sets (80% training, 20% testing) in chronological order
@@ -160,8 +161,8 @@ def train_evaluate_kfold_lstm(
 # LSTM
 def train_evaluate_simple_lstm(X_train, y_train, X_test, epochs=50, batch_size=32):
     # Reshaping the data
-    X_train_reshaped = X_train.values.reshape((X_train.shape[0], 1, X_train.shape[1]))
-    X_test_reshaped = X_test.values.reshape((X_test.shape[0], 1, X_test.shape[1]))
+    X_train_reshaped = X_train.reshape((X_train.shape[0], 1, X_train.shape[1]))
+    X_test_reshaped = X_test.reshape((X_test.shape[0], 1, X_test.shape[1]))
 
     # Building the LSTM model
     model = Sequential()
@@ -187,40 +188,50 @@ def train_and_plot(X, y, prediction_features, title, full_output = False):
 
   pretraining_set_X = X[prediction_features]
 
-  scaler_X = MinMaxScaler()
-  X_train = scaler_X.fit_transform(pretraining_set_X)
-  scaler_y = MinMaxScaler()
-  y = scaler_y.fit_transform(y)
+  # Split the dataset into training and testing sets
+  X_train, X_test, y_train, y_test = dataset_splitter(pretraining_set_X, y)
 
-  X_train, X_test, y_train, y_test = dataset_splitter(
-    pretraining_set_X, y
-  )
+  # Scale the X_train and X_test sets
+  # Use the same scaler fitted on the training data for the test data
+  scaler_X = MinMaxScaler()
+  X_train_scale = scaler_X.fit_transform(X_train)
+  X_test_scale = scaler_X.transform(X_test) 
+
+  # Scale the y_train and y_test sets
+  # Use the same scaler fitted on the training data for the test data
+  scaler_y = MinMaxScaler()
+  y_train_scale = scaler_y.fit_transform(y_train)
+  y_test_scale = scaler_y.transform(y_test) 
 
   if full_output == True:
     # Training and evaluating the Simple Linear Regression model
-    linear_model, linear_results = train_evaluate_linear_regression(X_train, y_train, X_test, y_test)
+    linear_model, linear_results = train_evaluate_linear_regression(
+       X_train_scale, y_train_scale, X_test_scale, y_test_scale
+    )
     print(f"{title} Linear Regression Baseline")
     print(linear_results)
 
-    kfold_lstm_results = train_evaluate_kfold_lstm(X_train, y_train)
+    kfold_lstm_results = train_evaluate_kfold_lstm(X_train_scale, y_train_scale)
     print(f"{title} LSTM KFold Performance Results")
     print(kfold_lstm_results)
 
-  lstm_train_results, lstm_test_results = train_evaluate_simple_lstm(X_train, y_train, X_test)
+  lstm_train_results, lstm_test_results = train_evaluate_simple_lstm(
+     X_train_scale, y_train_scale, X_test_scale
+  )
 
-  if len(lstm_test_results) != y_test.shape[0]:
+  if len(lstm_test_results) != y_test_scale.shape[0]:
     raise ValueError("Array length does not match the number of rows in DataFrame")
 
-  lstm_mean_absolute_error = mean_absolute_error(y_test, lstm_test_results)
-  lstm_mean_squared_error = mean_squared_error(y_test, lstm_test_results)
-  mape = mean_absolute_percentage_error(y_test, lstm_test_results)
+  lstm_mean_absolute_error = mean_absolute_error(y_test_scale, lstm_test_results)
+  lstm_mean_squared_error = mean_squared_error(y_test_scale, lstm_test_results)
+  mape = mean_absolute_percentage_error(y_test_scale, lstm_test_results)
 
   print(f"{title}: LSTM Performance Results")
   print(f"LSTM Mean Absolute Error: {lstm_mean_absolute_error}")
   print(f"LSTM Mean Squared Error: {lstm_mean_squared_error}")
-  print("Mean Absolute Percentage Error (MAPE):", round(mape, 6), "%")
+  print("Mean Absolute Percentage Error (MAPE):", 100 - round(mape, 6), "%")
 
-  test_series = pd.Series(y_test.flatten())
+  test_series = pd.Series(y_test_scale.flatten())
   pred_series = pd.Series(lstm_test_results)
   # pred_series.index = y_test.index
   residuals = test_series - pred_series
@@ -229,22 +240,24 @@ def train_and_plot(X, y, prediction_features, title, full_output = False):
 
   # Plot the residuals
   plt.figure(figsize=(8, 6))
-  sns.residplot(x=y_test, y=residuals, lowess=True, scatter_kws={'s': 50}, line_kws={'color': 'red', 'lw': 2})
+  sns.residplot(
+     x=y_test_scale, y=residuals, lowess=True, scatter_kws={'s': 50}, line_kws={'color': 'red', 'lw': 2}
+  )
   plt.xlabel('Fitted values')
   plt.ylabel('Residuals')
   plt.title(f'{title} Residual plot')
   plt.show()
 
-  y_test = scaler_y.inverse_transform(y_test)
-  y_pred_val = scaler_y.inverse_transform(pred_series.values.reshape(-1, 1))
+  y_test_reversed = scaler_y.inverse_transform(y_test_scale)
+  y_pred_val_reversed = scaler_y.inverse_transform(pred_series.values.reshape(-1, 1))
 
   # Extracting the relevant datetime index values
   DATETIME_WINDOW = 150
   datetime_index = X_train.index[:DATETIME_WINDOW]
 
   plt.figure(figsize=(12, 6))
-  plt.plot(datetime_index, y_test[:DATETIME_WINDOW], label='Actual')
-  plt.plot(datetime_index, y_pred_val[:DATETIME_WINDOW], label='Predicted')
+  plt.plot(datetime_index, y_test_reversed[:DATETIME_WINDOW], label='Actual')
+  plt.plot(datetime_index, y_pred_val_reversed[:DATETIME_WINDOW], label='Predicted')
   plt.title(f"{title}: Early Timeframe: Actual vs Predicted Values")
   plt.xlabel('Date') 
   plt.ylabel('Sensor (Ohms)')
@@ -255,8 +268,8 @@ def train_and_plot(X, y, prediction_features, title, full_output = False):
   datetime_index = X_train.index[len(X_train) - DATETIME_WINDOW:]
 
   plt.figure(figsize=(12, 6))
-  plt.plot(datetime_index, y_test[len(y_test) - DATETIME_WINDOW:], label='Actual')
-  plt.plot(datetime_index, y_pred_val[len(y_pred_val) - DATETIME_WINDOW:], label='Predicted')
+  plt.plot(datetime_index, y_test_reversed[len(y_test_reversed) - DATETIME_WINDOW:], label='Actual')
+  plt.plot(datetime_index, y_pred_val_reversed[len(y_pred_val_reversed) - DATETIME_WINDOW:], label='Predicted')
   plt.title(f"{title}: Late Timeframe: Actual vs Predicted Values")
   plt.xlabel('Date') 
   plt.ylabel('Sensor (Ohms)')
@@ -265,11 +278,12 @@ def train_and_plot(X, y, prediction_features, title, full_output = False):
   plt.show()
 
   plt.figure(figsize=(12, 6))
-  plt.plot(y_test, label='Actual')
-  plt.plot(y_pred_val, label='Predicted')
+  plt.plot(y_test_reversed, label='Actual')
+  plt.plot(y_pred_val_reversed, label='Predicted')
   plt.title(f"{title}: Actual vs Predicted Values")
   plt.xlabel('Date') 
   plt.ylabel('Sensor (Ohms)')
+  # plt.ylim(0, 50000)
   plt.xticks([])
   plt.legend()
   plt.show()
@@ -308,26 +322,27 @@ s1_drop_columns_for_training = ['Sensor1 Moisture (%)', 'Sensor2 Moisture (%)']
 sensor1_df.drop(s1_drop_columns_for_training, axis=1, inplace=True)
 
 # This is our prediction column
-X = sensor1_df.drop(['Sensor1 (Ohms)', ], axis=1)
+X = sensor1_df.drop(['Sensor1 (Ohms)', 'Sensor2 (Ohms)'], axis=1)
 y = sensor1_df[['Sensor1 (Ohms)']]
 
-# train_and_plot(X, y, pca_features, 'Sensor 1 PCA Only')
+train_and_plot(X, y, pca_features, 'Sensor 1 PCA Only')
 
+# Sensor 2 Focus
 sensor2_df = efficient_feature_df.copy()
 
 s2_drop_columns_for_training = ['Sensor1 Moisture (%)', 'Sensor2 Moisture (%)']
 sensor2_df.drop(s2_drop_columns_for_training, axis=1, inplace=True)
 
 # This is our prediction column
-X = sensor2_df.drop(['Sensor2 (Ohms)', ], axis=1)
+X = sensor2_df.drop(['Sensor2 (Ohms)', 'Sensor1 (Ohms)'], axis=1)
 y = sensor2_df[['Sensor2 (Ohms)']]
 
-# train_and_plot(X, y, pca_features, 'Sensor 2 PCA')
-# train_and_plot(X, y, feature_set_1, 'Sensor 2 Basic Features')
-# train_and_plot(X, y, feature_set_2, 'Sensor 2 Basic & PCA Features')
+train_and_plot(X, y, pca_features, 'Sensor 2 PCA')
 
 # --------------------------------------------------------------
+# --------------------------------------------------------------
 # Isolate sets to make sure predictions are generalized
+# --------------------------------------------------------------
 # --------------------------------------------------------------
 
 isolated_set_df = efficient_feature_df.copy()
@@ -341,11 +356,11 @@ isolated_set_df.drop(drop_columns_for_training, axis=1, inplace=True)
 
 # This is our prediction column
 MONTH_TO_TEST = 4
-pre_X_train = isolated_set_df[isolated_set_df['month'] != MONTH_TO_TEST].drop(['Sensor2 (Ohms)', ], axis=1)[pca_features]
-pre_y_train = isolated_set_df[isolated_set_df['month'] != MONTH_TO_TEST][['Sensor2 (Ohms)']]
+pre_X_train = isolated_set_df[isolated_set_df['month'] != MONTH_TO_TEST].drop(['Sensor2 (Ohms)', 'Sensor1 (Ohms)'], axis=1)[pca_features]
+pre_y_train = isolated_set_df[isolated_set_df['month'] != MONTH_TO_TEST][['Sensor1 (Ohms)']]
 
-pre_X_test = isolated_set_df[isolated_set_df['month'] == MONTH_TO_TEST].drop(['Sensor2 (Ohms)', ], axis=1)[pca_features]
-pre_y_test = isolated_set_df[isolated_set_df['month'] == MONTH_TO_TEST]['Sensor2 (Ohms)']
+pre_X_test = isolated_set_df[isolated_set_df['month'] == MONTH_TO_TEST].drop(['Sensor2 (Ohms)', 'Sensor1 (Ohms)'], axis=1)[pca_features]
+pre_y_test = isolated_set_df[isolated_set_df['month'] == MONTH_TO_TEST]['Sensor1 (Ohms)']
 
 scaler_X = MinMaxScaler()
 X_train = scaler_X.fit_transform(pre_X_train)
