@@ -14,3 +14,7 @@ def set_datetime_as_index(dataframe: pd.DataFrame, datetime_column: str):
     dataframe.index = pd.to_datetime(dataframe.index)
 
     return dataframe
+
+def resistance_to_moisture(resistance):
+    return 100 - ((resistance - 2000) / (50000 - 2000)) * 100
+

@@ -3,10 +3,7 @@ import os
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_path)
 
-import matplotlib.pyplot as plt
-import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
 from pipeline.config import set_config
 set_config()
 
@@ -28,26 +25,6 @@ for col in core_feature_columns:
 # 672, 15 minute intervals in a week
 for col in core_feature_columns:
     moist_complete_meteo_sensor_df[f"{col}_lag_7_days"] = lagged_df[col].shift(672)
-
-# --------------------------------------------------------------
-# Feature Interactions
-# --------------------------------------------------------------
-
-# action_df = lagged_df.copy()
-# # Interaction between Temperature and Humidity (Likely to Influence Soil Moisture)
-# action_df['temp_hum_interaction'] = action_df['Temp - C'] * action_df['Hum - %']
-# # Barometer and Temperature Interaction (Pressure and Temperature Correlation)
-# action_df['barometer_temp_interaction'] = action_df['Barometer - hPa'] * action_df['Temp - C']
-# # Wind Speed and Temperature Interaction (Possible Influence on Evaporation)
-# action_df['wind_temp_interaction'] = action_df['Wind Speed - km/h'] * action_df['Temp - C']
-# # Dew Point and Humidity Interaction (Moisture Interaction)
-# action_df['dew_hum_interaction'] = action_df['Dew Point - C'] * action_df['Hum - %']
-# # Heating and Cooling Degree Days Interaction with Temperature (Energy Considerations)
-# action_df['heat_cool_interaction'] = action_df['Heating Degree Days'] * action_df['Cooling Degree Days'] * action_df['Temp - C']
-# # Rain and Wind Speed Interaction (Weather Condition Correlation)
-# action_df['rain_wind_interaction'] = action_df['Rain - mm'] * action_df['Wind Speed - km/h']
-# # Overall Moisture Index (Combining Soil and Atmospheric Moisture)
-# action_df['overall_moisture_index'] = (action_df['Sensor1 Moisture (%)'] + action_df['Sensor2 Moisture (%)'])/2 * action_df['Hum - %']
 
 # ---------------------------------------------------------
 # Cleaning our Data

@@ -6,7 +6,7 @@ sys.path.append(root_path)
 import pandas as pd
 import numpy as np
 from glob import glob
-from data.datetime_utils import set_datetime_as_index
+from data.data_utils import set_datetime_as_index, resistance_to_moisture
 import data.remove_outliers as remove_outliers
 from pipeline.config import set_config
 set_config()
@@ -96,27 +96,15 @@ complete_meteo_sensor_df = pd.merge(meteo_model_resampled, sensor_merged, left_i
 # remove the null values
 complete_meteo_sensor_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
-def resistance_cutoff(resistance):
-    if resistance <= 2000:
-        return 2000
-    elif resistance >= 50000:
-        return 50000
-    else:
-        return resistance
-
-def resistance_to_moisture(resistance):
-    return 100 - ((resistance - 2000) / (50000 - 2000)) * 100
-
 #--------------------------------------------------------------
 # Remove The highest values and set moisture
 #--------------------------------------------------------------
 
-moist_meteo_sensor_df = complete_meteo_sensor_df.copy()
-# Apply the custom function to your dataframe (assuming df is your dataframe containing resistance values)
-moist_meteo_sensor_df['Sensor1 (Ohms)'] = moist_meteo_sensor_df['Sensor1 (Ohms)'].apply(resistance_cutoff)
-moist_meteo_sensor_df['Sensor2 (Ohms)'] = moist_meteo_sensor_df['Sensor2 (Ohms)'].apply(resistance_cutoff)
-moist_meteo_sensor_df['Sensor1 Moisture (%)'] = moist_meteo_sensor_df['Sensor1 (Ohms)'].apply(resistance_to_moisture)
-moist_meteo_sensor_df['Sensor2 Moisture (%)'] = moist_meteo_sensor_df['Sensor2 (Ohms)'].apply(resistance_to_moisture)
+pre_clean_df = complete_meteo_sensor_df.copy()
+
+# Remove the highest values
+moist_meteo_sensor_df = pre_clean_df[pre_clean_df['Sensor1 (Ohms)'] < 50000]
+moist_meteo_sensor_df = moist_meteo_sensor_df[moist_meteo_sensor_df['Sensor2 (Ohms)'] < 50000]
 
 # --------------------------------------------------------------
 # Removing Outliers
@@ -140,8 +128,7 @@ for col in outlier_columns:
   remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
 
 # We will choose LOF and remove the outliers
-
-real_outlier_columns = ['Sensor1 (Ohms)', 'Sensor2 (Ohms)', 'Sensor1 Moisture (%)', 'Sensor2 Moisture (%)']
+real_outlier_columns = ['Sensor1 (Ohms)', 'Sensor2 (Ohms)']
 
 outlier_safe_df, outliers, X_scores = remove_outliers.mark_outliers_lof(moist_meteo_sensor_df, real_outlier_columns)
 for column in real_outlier_columns:
