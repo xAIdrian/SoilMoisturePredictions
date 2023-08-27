@@ -312,7 +312,8 @@ sensor1_df = efficient_feature_df.copy()
 X = sensor1_df.drop(['Sensor1 (Ohms)', 'Sensor2 (Ohms)'], axis=1)
 y = sensor1_df[['Sensor1 (Ohms)']]
 
-# train_and_plot(X, y, pca_features, 'Sensor 1 PCA Only')
+train_and_plot(X, y, pca_features, 'Sensor 1 PCA Only')
+train_and_plot(X, y, feature_set_2, 'Sensor 2 Basic & PCA')
 
 # Sensor 2 Focus
 sensor2_df = efficient_feature_df.copy()
@@ -322,7 +323,7 @@ X = sensor2_df.drop(['Sensor2 (Ohms)', 'Sensor1 (Ohms)'], axis=1)
 y = sensor2_df[['Sensor2 (Ohms)']]
 
 train_and_plot(X, y, pca_features, 'Sensor 2 PCA')
-# train_and_plot(X, y, feature_set_2, 'Sensor 2 Basic & PCA')
+train_and_plot(X, y, feature_set_2, 'Sensor 2 Basic & PCA')
 
 # --------------------------------------------------------------
 # --------------------------------------------------------------
