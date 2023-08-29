@@ -6,7 +6,7 @@ sys.path.append(root_path)
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
-from pipeline.config import set_config
+from config.config import set_config
 set_config()
 
 accuweather_df = pd.read_pickle('../../data/interim/01_accuweather_comparison_datetime_df.pkl')

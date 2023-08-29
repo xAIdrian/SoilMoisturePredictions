@@ -4,7 +4,7 @@ root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(root_path)
 
 import pandas as pd
-from pipeline.config import set_config
+from config.config import set_config
 set_config()
 
 moist_complete_meteo_sensor_df = pd.read_pickle('../../data/interim/02_outlier_safe_complete_datetime_df.pkl')
