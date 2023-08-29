@@ -8,46 +8,86 @@ import numpy as np
 from glob import glob
 from data.data_utils import set_datetime_as_index, resistance_to_moisture
 import data.remove_outliers as remove_outliers
-from pipeline.config import set_config
+
+from sklearn.pipeline import Pipeline
+from sklearn.base import BaseEstimator, TransformerMixin
+
+from config.config import set_config
 set_config()
 
-def load_comparative_analysis_data():
-  accuweather_df = pd.DataFrame()
-  accuweather_meteo_df = pd.DataFrame()
+class FileLoader(BaseEstimator, TransformerMixin):
+    def __init__(self, pattern):
+        self.pattern = pattern
 
-  # the beginning of processing all our files by filename
-  all_files = glob('../../data/raw/*.csv')
-  print(f"Total number of files: {len(all_files)}")
+    def fit(self, X=None):
+        return self
 
-  for filename in all_files:
-    with open(filename, 'r', encoding='utf-8', errors='ignore') as file:
-      if 'accuweather_hourly' in filename:
-        accuweather_df = pd.read_csv(file)
-      elif 'meteo_data_for_accuweather_comparison' in filename:
-        accuweather_meteo_df = pd.read_csv(file)
-      else:
-        print(f'File {filename} is not being processed') 
+    def transform(self, X=None):
+        load_files = glob(self.pattern)
 
-  return accuweather_df, accuweather_meteo_df       
+        if not load_files:
+            raise ValueError(f"No files found for the pattern: {self.pattern}")
 
-def load_correlation_analysis_data():     
-  meteo_model_df = pd.DataFrame()
-  sensor1_df = pd.DataFrame()
-  sensor2_df = pd.DataFrame()
+        load_file = load_files[0]
 
-  all_files = glob('../../data/raw/*.csv')
-  print(f"Total number of files: {len(all_files)}")
+        df = pd.DataFrame()
 
-  for filename in all_files:
-    with open(filename, 'r', encoding='utf-8', errors='ignore') as file:
-      if 'meteo_data for model' in filename:
-        meteo_model_df = pd.read_csv(file)
-      elif 'Sensor1' in filename:
-        sensor1_df = pd.read_csv(file)
-      elif 'Sensor2' in filename:
-        sensor2_df = pd.read_csv(file)
+        print(f"Loading: {load_file}")
 
-  return meteo_model_df, sensor1_df, sensor2_df
+        with open(load_file, 'r', encoding='utf-8', errors='ignore') as file:
+          df = pd.read_csv(file)
+
+        return df
+    
+class ColumnCleaner(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X.columns = X.columns.str.strip()
+        return X
+
+
+class SimpleDateTimeIndexSetter(BaseEstimator, TransformerMixin):
+    def __init__(self, datetime_column):
+        self.datetime_column = datetime_column
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X = set_datetime_as_index(X, self.datetime_column)
+        return X    
+
+class ToPickleSaver(BaseEstimator, TransformerMixin):
+    def __init__(self, pickle_name):
+        self.pickle_name = pickle_name
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        X.to_pickle(self.pickle_name)
+        return X
+    
+accuweather_pipeline = Pipeline([
+    ('file_loader', FileLoader('../../data/raw/accuweather_hourly_1.29_to_6.15.csv')),
+    ('column_cleaner', ColumnCleaner()),
+    ('datetime_index_setter', SimpleDateTimeIndexSetter('Date & Time')),
+    ('pickle_saver', ToPickleSaver('../../data/interim/01_accuweather_comparison_datetime_df.pkl'))
+])  
+
+meteo_data_pipeline = Pipeline([
+    ('file_loader', FileLoader('../../data/raw/meteo_data_for_accuweather_comparison_1.30_to_6.15.csv')),
+    ('column_cleaner', ColumnCleaner()),
+    ('datetime_index_setter', SimpleDateTimeIndexSetter('Date & Time')),
+    ('pickle_saver', ToPickleSaver('../../data/interim/01_accuweather_metero_comparison_datetime_df.pkl'))
+])  
+
+accuweather_df = accuweather_pipeline.fit_transform(X=None)
+accuweather_meteo_df= meteo_data_pipeline.fit_transform(X=None)
+
+correlation_pipeline = Pipeline([])
 
 # --------------------------------------------------------------
 # Prepare our comparison dataframes
@@ -55,9 +95,6 @@ def load_correlation_analysis_data():
 
 accuweather_df, accuweather_meteo_df = load_comparative_analysis_data()
 
-# Column cleaning. Strip white spaces
-accuweather_df.columns = accuweather_df.columns.str.strip()
-accuweather_meteo_df.columns = accuweather_meteo_df.columns.str.strip()
 
 # Set date column to proper datetime format
 accuweather_df = set_datetime_as_index(accuweather_df, 'Date & Time')

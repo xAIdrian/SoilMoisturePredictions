@@ -16,7 +16,7 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_absolute_percentage_error
 
 from data.data_utils import resistance_to_moisture
-from pipeline.config import set_config
+from config.config import set_config
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd

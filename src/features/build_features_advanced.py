@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from features.DataTransformation import PrincipalComponentAnalysis
 from features.TemporalAbstraction import NumericalAbstraction
-from pipeline.config import set_config
+from config.config import set_config
 set_config()
 
 complete_meteo_sensor_df = pd.read_pickle('../../data/interim/03_data_features.pkl')

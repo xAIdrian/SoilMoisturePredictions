@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from statsmodels.tsa.seasonal import seasonal_decompose
-from pipeline.config import set_config
+from config.config import set_config
 set_config()
 
 # -----------------------------------------------------------------
