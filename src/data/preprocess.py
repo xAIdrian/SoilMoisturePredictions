@@ -161,7 +161,7 @@ def plot_outliers(source_df):
     remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
 
 
-def preprocess():
+def preprocess_pipeline():
       
   accuweather_pipeline = Pipeline([
       ('file_loader', FileLoader('../../data/raw/accuweather_hourly_1.29_to_6.15.csv')),
@@ -222,6 +222,8 @@ def preprocess():
 
   outlier_pipeline.fit_transform(X=complete_meteo_sensor_df)
 
+  return outlier_pipeline
+
 if __name__ == "__main__":
-    preprocess()
+    preprocess_pipeline()
 
