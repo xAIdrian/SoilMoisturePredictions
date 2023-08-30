@@ -1,6 +1,6 @@
 import sys
 import os
-root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../'))
 sys.path.append(root_path)
 
 import pandas as pd
@@ -58,15 +58,17 @@ class DateTimeIndexSetter(BaseEstimator, TransformerMixin):
         X = set_datetime_as_index(X, self.datetime_column)
         return X    
 
-class ToPickleSaver(BaseEstimator, TransformerMixin):
-    def __init__(self, pickle_name):
+class Saver(BaseEstimator, TransformerMixin):
+    def __init__(self, pickle_name, csv_name):
         self.pickle_name = pickle_name
+        self.csv_name = csv_name
 
     def fit(self, X, y=None):
         return self
 
     def transform(self, X, y=None):
         X.to_pickle(self.pickle_name)
+        X.to_csv(self.csv_name)
         return X
 
 # --------------------------------------------------------------
@@ -84,6 +86,7 @@ class ColumnNameCleaner(BaseEstimator, TransformerMixin):
     def transform(self, X, y=None):
         X.rename(columns={ self.old_col_name: self.new_col_name }, inplace=True)
         return X
+    
 class SensorGroupBy(BaseEstimator, TransformerMixin):
     def __init__(self, group_by_column):
         self.group_by_column = group_by_column
@@ -104,6 +107,8 @@ class Resampler(BaseEstimator, TransformerMixin):
     
     def transform(self, X, y=None):
         X = X.resample(self.resample_interval).mean()
+        # remove the null values
+        X.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
         return X
 
 #--------------------------------------------------------------
@@ -160,38 +165,67 @@ def plot_outliers(source_df):
   for col in outlier_columns:
     remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
 
+def preprocess_comparison_pipeline(accuweather_file_path, meteo_data_file_path):
+    accuweather_pipeline = Pipeline([
+      # ('file_loader', FileLoader('../../data/raw/accuweather_hourly_1.29_to_6.15.csv')),
+      ('file_loader', FileLoader(accuweather_file_path)),
+      ('column_cleaner', ColumnSpaceCleaner()),
+      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
+      ('pickle_saver', Saver(
+        '../../data/interim/01_accuweather_comparison_datetime_df.pkl',
+        '../../data/processed/01_accuweather_comparison_datetime_df.csv'
+      ))
+    ])  
 
-def preprocess_pipeline(plot=False):
+    meteo_data_pipeline = Pipeline([
+        # ('file_loader', FileLoader('../../data/raw/meteo_data_for_accuweather_comparison_1.30_to_6.15.csv')),
+        ('file_loader', FileLoader(meteo_data_file_path)),
+        ('column_cleaner', ColumnSpaceCleaner()),
+        ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
+        ('pickle_saver', Saver(
+          '../../data/interim/01_accuweather_metero_comparison_datetime_df.pkl',
+          '../../data/processed/01_accuweather_metero_comparison_datetime_df.csv'
+        ))
+    ])  
+    # accuweather_pipeline.fit_transform(X=None)
+    # meteo_data_pipeline.fit_transform(X=None)
+    return accuweather_pipeline, meteo_data_pipeline
+
+def preprocess_pipeline(
+        metero_data_file_path,
+        sensor1_file_path,
+        sensor2_file_path,
+        plot=False
+):
       
-  accuweather_pipeline = Pipeline([
-      ('file_loader', FileLoader('../data/raw/accuweather_hourly_1.29_to_6.15.csv')),
-      ('column_cleaner', ColumnSpaceCleaner()),
-      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('pickle_saver', ToPickleSaver('../data/interim/01_accuweather_comparison_datetime_df.pkl'))
-  ])  
-
-  meteo_data_pipeline = Pipeline([
-      ('file_loader', FileLoader('../data/raw/meteo_data_for_accuweather_comparison_1.30_to_6.15.csv')),
-      ('column_cleaner', ColumnSpaceCleaner()),
-      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('pickle_saver', ToPickleSaver('../data/interim/01_accuweather_metero_comparison_datetime_df.pkl'))
-  ])  
-
-  accuweather_df = accuweather_pipeline.fit_transform(X=None)
-  accuweather_meteo_df= meteo_data_pipeline.fit_transform(X=None)
-
   meteo_model_pipeline = Pipeline([
-      ('file_loader', FileLoader('../data/raw/meteo_data for model 30.1.2023. - 31.7.2023..csv'))
+      ('file_loader', FileLoader(metero_data_file_path)),
+      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
+      ('resampler', Resampler('15T'))
   ])  
 
   sensor1_pipeline = Pipeline([
-      ('file_loader', FileLoader('../data/raw/Sensor1 data 21.1.2023..csv'))
+      ('file_loader', FileLoader(sensor1_file_path)),
+      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
+      ('resampler', Resampler('15T'))
   ]) 
 
   sensor2_pipeline = Pipeline([
-      ('file_loader', FileLoader('../data/raw/Sensor2 data 21.1.2023..csv')),
-      ('datetime_name_cleaner', ColumnNameCleaner('Date&Time', 'Date & Time'))
+      ('file_loader', FileLoader(sensor2_file_path)),
+      ('datetime_name_cleaner', ColumnNameCleaner('Date&Time', 'Date & Time')),
+      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
+      ('resampler', Resampler('15T'))
   ]) 
+
+  outlier_pipeline = Pipeline([
+      ('sensor1_extreme_value_remover', ExtremeValueRemover('Sensor1 (Ohms)', 50000)),
+      ('sensor2_extreme_value_remover', ExtremeValueRemover('Sensor2 (Ohms)', 50000)),
+      ('remove_outliers_with_lof', RemoveOutliersWithLOF(['Sensor1 (Ohms)', 'Sensor2 (Ohms)'])),
+      ('pickle_saver', Saver(
+        f"../../data/interim/02_outlier_safe_complete_datetime_df.pkl",
+        '../../data/processed/02_outlier_safe_complete_datetime_df.csv'
+      ))
+  ])
 
   meteo_model_df = meteo_model_pipeline.fit_transform(X=None)
   sensor1_df= sensor1_pipeline.fit_transform(X=None)        
@@ -203,24 +237,23 @@ def preprocess_pipeline(plot=False):
 
   # remove the null values
   complete_meteo_sensor_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
+  complete_meteo_sensor_df.to_pickle('../../data/interim/02_complete_datetime_df.pkl')
+  complete_meteo_sensor_df.to_csv('../../data/processed/02_complete_datetime_df.csv')
 
   if plot:
     plot_outliers(complete_meteo_sensor_df)
   
-  outlier_pipeline = Pipeline([
-      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('resampler', Resampler('15T')),
-      ('sensor1_extreme_value_remover', ExtremeValueRemover('Sensor1 (Ohms)', 50000)),
-      ('sensor2_extreme_value_remover', ExtremeValueRemover('Sensor2 (Ohms)', 50000)),
-      ('remove_outliers_with_lof', RemoveOutliersWithLOF(['Sensor1 (Ohms)', 'Sensor2 (Ohms)'])),
-      ('pickle_saver', ToPickleSaver('../data/interim/02_outlier_safe_complete_datetime_df.pkl'))
-  ])
-
-  # outlier_pipeline.fit_transform(X=complete_meteo_sensor_df)
-
-  return outlier_pipeline, complete_meteo_sensor_df
+  outlier_pipeline_output_path = '../../data/processed/02_outlier_safe_complete_datetime_df.csv'
+  return outlier_pipeline, outlier_pipeline_output_path
 
 if __name__ == "__main__":
-    outlier_pipeline, complete_df = preprocess_pipeline()
-    # outlier_pipeline.fit_transform(X=codrmplete_df)
+    outlier_pipeline, outlier_pipeline_output_path = preprocess_pipeline(
+        '../../data/raw/meteo_data for model 30.1.2023. - 31.7.2023..csv',
+        '../../data/raw/Sensor1 data 21.1.2023..csv',
+        '../../data/raw/Sensor2 data 21.1.2023..csv'
+    )
+    
+    outlier_pipeline.fit_transform(
+        X=pd.read_pickle('../../data/interim/02_complete_datetime_df.pkl')
+    )
 
