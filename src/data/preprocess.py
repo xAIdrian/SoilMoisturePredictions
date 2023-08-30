@@ -161,43 +161,36 @@ def plot_outliers(source_df):
     remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
 
 
-def preprocess_pipeline():
+def preprocess_pipeline(plot=False):
       
   accuweather_pipeline = Pipeline([
-      ('file_loader', FileLoader('../../data/raw/accuweather_hourly_1.29_to_6.15.csv')),
+      ('file_loader', FileLoader('../data/raw/accuweather_hourly_1.29_to_6.15.csv')),
       ('column_cleaner', ColumnSpaceCleaner()),
       ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('pickle_saver', ToPickleSaver('../../data/interim/01_accuweather_comparison_datetime_df.pkl'))
+      ('pickle_saver', ToPickleSaver('../data/interim/01_accuweather_comparison_datetime_df.pkl'))
   ])  
 
   meteo_data_pipeline = Pipeline([
-      ('file_loader', FileLoader('../../data/raw/meteo_data_for_accuweather_comparison_1.30_to_6.15.csv')),
+      ('file_loader', FileLoader('../data/raw/meteo_data_for_accuweather_comparison_1.30_to_6.15.csv')),
       ('column_cleaner', ColumnSpaceCleaner()),
       ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('pickle_saver', ToPickleSaver('../../data/interim/01_accuweather_metero_comparison_datetime_df.pkl'))
+      ('pickle_saver', ToPickleSaver('../data/interim/01_accuweather_metero_comparison_datetime_df.pkl'))
   ])  
 
   accuweather_df = accuweather_pipeline.fit_transform(X=None)
   accuweather_meteo_df= meteo_data_pipeline.fit_transform(X=None)
 
   meteo_model_pipeline = Pipeline([
-      ('file_loader', FileLoader('../../data/raw/meteo_data for model 30.1.2023. - 31.7.2023..csv')),
-      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('resampler', Resampler('15T')),
-      ('pickle_saver', ToPickleSaver('../../data/interim/01_accuweather_comparison_datetime_df.pkl'))
+      ('file_loader', FileLoader('../data/raw/meteo_data for model 30.1.2023. - 31.7.2023..csv'))
   ])  
 
   sensor1_pipeline = Pipeline([
-      ('file_loader', FileLoader('../../data/raw/Sensor1 data 21.1.2023..csv')),
-      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('resampler', Resampler('15T')),
+      ('file_loader', FileLoader('../data/raw/Sensor1 data 21.1.2023..csv'))
   ]) 
 
   sensor2_pipeline = Pipeline([
-      ('file_loader', FileLoader('../../data/raw/Sensor2 data 21.1.2023..csv')),
-      ('datetime_name_cleaner', ColumnNameCleaner('Date&Time', 'Date & Time')),
-      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
-      ('resampler', Resampler('15T')),
+      ('file_loader', FileLoader('../data/raw/Sensor2 data 21.1.2023..csv')),
+      ('datetime_name_cleaner', ColumnNameCleaner('Date&Time', 'Date & Time'))
   ]) 
 
   meteo_model_df = meteo_model_pipeline.fit_transform(X=None)
@@ -211,19 +204,23 @@ def preprocess_pipeline():
   # remove the null values
   complete_meteo_sensor_df.interpolate(method='linear', limit_direction='forward', axis=0, inplace=True)
 
-  # plot_outliers(complete_meteo_sensor_df)
+  if plot:
+    plot_outliers(complete_meteo_sensor_df)
   
   outlier_pipeline = Pipeline([
+      ('datetime_index_setter', DateTimeIndexSetter('Date & Time')),
+      ('resampler', Resampler('15T')),
       ('sensor1_extreme_value_remover', ExtremeValueRemover('Sensor1 (Ohms)', 50000)),
       ('sensor2_extreme_value_remover', ExtremeValueRemover('Sensor2 (Ohms)', 50000)),
       ('remove_outliers_with_lof', RemoveOutliersWithLOF(['Sensor1 (Ohms)', 'Sensor2 (Ohms)'])),
-      ('pickle_saver', ToPickleSaver('../../data/interim/02_outlier_safe_complete_datetime_df.pkl'))
+      ('pickle_saver', ToPickleSaver('../data/interim/02_outlier_safe_complete_datetime_df.pkl'))
   ])
 
-  outlier_pipeline.fit_transform(X=complete_meteo_sensor_df)
+  # outlier_pipeline.fit_transform(X=complete_meteo_sensor_df)
 
-  return outlier_pipeline
+  return outlier_pipeline, complete_meteo_sensor_df
 
 if __name__ == "__main__":
-    preprocess_pipeline()
+    outlier_pipeline, complete_df = preprocess_pipeline()
+    # outlier_pipeline.fit_transform(X=codrmplete_df)
 
