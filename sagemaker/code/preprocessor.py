@@ -1,35 +1,66 @@
 
+import sys
+from pathlib import Path
+
+SOURCE_FOLDER = Path("src")
+sys.path.append(f"../{SOURCE_FOLDER}")
+
 import os
 import numpy as np
 import json
 import numpy as np
 import tempfile
-from pathlib import Path
-from constants import *
 from pickle import dump
 import pandas as pd
 from glob import glob
-from data.data_utils import set_datetime_as_index
-import data.remove_outliers as remove_outliers
 
-from config.config import set_config
-set_config()
-
-from sagemaker.inputs import FileSystemInput
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.pipeline import Pipeline
-# from sagemaker.processing import ProcessingInput, ProcessingOutput
-# from sagemaker.sklearn.processing import SKLearnProcessor
-# from sagemaker.workflow.steps import ProcessingStep
-# from sagemaker.workflow.parameters import ParameterString
-# from sagemaker.workflow.pipeline import Pipeline
-# from sagemaker.workflow.steps import CacheConfig
-# from sagemaker.workflow.pipeline_definition_config import PipelineDefinitionConfig
+from sklearn.neighbors import LocalOutlierFactor 
 
 BASE_DIRECTORY = "/opt/ml/processing"
 WEATHER_DATA_FILEPATH = Path(BASE_DIRECTORY) / "input" / "meteo_weather.csv"
 SENSOR1_DATA_FILEPATH = Path(BASE_DIRECTORY) / "input" / "sensor1.csv"
 SENSOR2_DATA_FILEPATH = Path(BASE_DIRECTORY) / "input" / "sensor2.csv"
+
+def set_datetime_as_index(dataframe: pd.DataFrame, datetime_column: str):
+    dataframe[datetime_column] = pd.to_datetime(dataframe[datetime_column], format='mixed', infer_datetime_format=True)
+
+    # standardize to the format: 'Year-Month-Day Hour:Minute:Second'
+    dataframe[datetime_column] = dataframe[datetime_column].apply(lambda x: x.strftime('%Y-%m-%d %H:%M:%S'))
+
+    dataframe.set_index(datetime_column, inplace=True)
+
+    dataframe.sort_index(inplace=True)
+
+    # update the index to be datetime
+    dataframe.index = pd.to_datetime(dataframe.index)
+
+    return dataframe
+
+def mark_outliers_lof(dataset, columns, n=20):
+    """Mark values as outliers using LOF
+
+    Args:
+        dataset (pd.DataFrame): The dataset
+        col (string): The column you want apply outlier detection to
+        n (int, optional): n_neighbors. Defaults to 20.
+    
+    Returns:
+        pd.DataFrame: The original dataframe with an extra boolean column
+        indicating whether the value is an outlier or not.
+    """
+    
+    dataset = dataset.copy()
+
+    lof = LocalOutlierFactor(n_neighbors=n)
+    data = dataset[columns]
+    outliers = lof.fit_predict(data)
+    X_scores = lof.negative_outlier_factor_
+
+    dataset["outlier_lof"] = outliers == -1
+    return dataset, outliers, X_scores
+
 
 def _save_splits(base_directory, train, validation, test):
     """
@@ -202,7 +233,7 @@ class RemoveOutliersWithLOF(BaseEstimator, TransformerMixin):
 
     def transform(self, X, y=None):
 
-      outlier_safe_df, outliers, X_scores = remove_outliers.mark_outliers_lof(X, self.columns)
+      outlier_safe_df, outliers, X_scores = mark_outliers_lof(X, self.columns)
       for column in self.columns:
         outlier_safe_df.loc[outlier_safe_df['outlier_lof'], column] = np.nan
 
@@ -211,25 +242,6 @@ class RemoveOutliersWithLOF(BaseEstimator, TransformerMixin):
       outlier_safe_df.drop('outlier_lof', axis=1, inplace=True)
 
       return outlier_safe_df    
-
-def plot_outliers(source_df):
-  moist_meteo_sensor_df = source_df.copy()
-  outlier_columns = list(moist_meteo_sensor_df.columns)
-
-  print('IQR method')
-  for col in outlier_columns:
-    iqr_outlier_plot_dataset = remove_outliers.mark_outliers_iqr(moist_meteo_sensor_df, col)
-    remove_outliers.plot_binary_outliers(iqr_outlier_plot_dataset, col, outlier_col=col + '_outlier', reset_index=True)
-
-  print('Chauvenet method')
-  for col in outlier_columns:
-    chauvenet_outlier_plot_dataset = remove_outliers.mark_outliers_chauvenet(moist_meteo_sensor_df, col)
-    remove_outliers.plot_binary_outliers(chauvenet_outlier_plot_dataset, col, outlier_col=col + '_outlier', reset_index=True)
-
-  print('LOF method')
-  lof_outlier_plot_dataset, outliers, X_scores = remove_outliers.mark_outliers_lof(moist_meteo_sensor_df, outlier_columns)
-  for col in outlier_columns:
-    remove_outliers.plot_binary_outliers(dataset=lof_outlier_plot_dataset, col=col, outlier_col="outlier_lof", reset_index=True)
 
 def preprocess_pipeline(
     base_directory,

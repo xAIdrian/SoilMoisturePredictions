@@ -7,11 +7,10 @@ BUCKET = "default-soil-predictions"
 S3_LOCATION = f"s3://{BUCKET}/soilpreds"
 
 DATA_ACCUWEATHER_FILEPATH = Path().resolve() / "data" / "accuweather_hourly_1.29_to_6.15.csv"
-DATA_WEATHERLINK_COMPARE_FILEPATH = Path().resolve() / "data" / "meteo_data for model 30.1.2023. - 31.7.2023..csv"
+DATA_WEATHERLINK_COMPARE_FILEPATH = Path().resolve() / "data" / "meteo_data_for_accuweather_comparison_1.30_to_6.15.csv"
 DATA_WEATHERLINK_MODEL_FILEPATH = Path().resolve() / "data" / "meteo_data for model 30.1.2023. - 31.7.2023..csv"
-DATA_SENSOR1_FILEPATH = Path().resolve() / "data" / "meteo_data for model 30.1.2023. - 31.7.2023..csv"
-DATA_SENSOR2_FILEPATH = Path().resolve() / "data" / "meteo_data for model 30.1.2023. - 31.7.2023..csv"
-
+DATA_SENSOR1_FILEPATH = Path().resolve() / "data" / "Sensor1 data 21.1.2023..csv"
+DATA_SENSOR2_FILEPATH = Path().resolve() / "data" / "Sensor2 data 21.1.2023..csv"
 
 sagemaker_client = boto3.client("sagemaker")
 iam_client = boto3.client("iam")
